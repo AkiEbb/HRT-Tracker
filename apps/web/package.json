@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "tailwindcss": "^4.3.5",
+    "vue-tsc": "^3.3.14",
     "wrangler": "^4.42.0"
   }
 }
