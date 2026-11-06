@@ -1,0 +1,41 @@
+# deps
+node_modules/
+.pnp.*
+
+# nuxt / nitro
+.nuxt/
+.output/
+.nitro/
+.cache/
+dist/
+.data/
+
+# cloudflare
+.wrangler/
+.dev.vars
+worker-configuration.d.ts
+
+# env
+.env
+.env.*
+!.env.example
+
+# databases
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+
+# build / test artifacts
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

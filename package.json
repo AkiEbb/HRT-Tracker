@@ -1,0 +1,32 @@
+{
+  "name": "hrt-tracker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "bun@1.4.2",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun --filter @hrt/web dev",
+    "build": "bun --filter @hrt/web build",
+    "build:cf": "bun --filter @hrt/web build:cf",
+    "build:node": "bun --filter @hrt/web build:node",
+    "test": "bun test",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "check:i18n": "bun scripts/check-i18n.mjs",
+    "db:generate:sqlite": "drizzle-kit generate --dialect sqlite --schema packages/db/src/schema.sqlite.ts --out deploy/migrations/sqlite",
+    "db:generate:pg": "drizzle-kit generate --dialect postgresql --schema packages/db/src/schema.pg.ts --out deploy/migrations/pg",
+    "changelog": "git-cliff -o CHANGELOG.md"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "bun": ">=1.4.0",
+    "node": ">=22"
+  }
+}

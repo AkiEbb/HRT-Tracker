@@ -1,0 +1,43 @@
+# git-cliff configuration — https://git-cliff.org
+# 约定提交：https://www.conventionalcommits.org/
+
+[changelog]
+header = """
+# Changelog\n
+本项目所有值得记录的变更都写在这里。提交遵循 [Conventional Commits](https://www.conventionalcommits.org/)。\n
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}\
+{% endfor %}
+{% endfor %}\n
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^build|^ci", group = "Build & CI" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore|^style", group = "Chores" },
+  { message = "^revert", group = "Reverts" },
+]
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9]*"
+sort_commits = "oldest"
