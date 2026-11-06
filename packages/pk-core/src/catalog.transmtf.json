@@ -1,0 +1,142 @@
+{
+  "_source": {
+    "name": "Transmtf-HRT-Tracker PK model",
+    "upstream": "https://github.com/TransmtfTeam/Transmtf-HRT-Tracker",
+    "license": "MIT (c) 2025 Transmtf Team",
+    "retrieved": "2026-11-06",
+    "note": "只取药代动力学参数与模型规格（速率常数、分子量、产品先验），按规格重新实现，未复制上游实现代码。本引擎在 v0.1 只覆盖雌二醇：上游另有 CPA 二室模型、比卡鲁胺单室模型与 EU 长效 depot，留给 v0.3。"
+  },
+  "core": {
+    "vdPerKG": 2,
+    "kClear": 0.41,
+    "kClearInjection": 0.041,
+    "depotK1Corr": 1
+  },
+  "molecularWeight": {
+    "E2": 272.38,
+    "EB": 376.5,
+    "EV": 356.5,
+    "EC": 396.58,
+    "EN": 384.56
+  },
+  "injection": {
+    "twoPartDepot": {
+      "EB": { "fracFast": 0.9, "k1Fast": 0.144, "k1Slow": 0.114 },
+      "EV": { "fracFast": 0.4, "k1Fast": 0.0216, "k1Slow": 0.0138 },
+      "EC": { "fracFast": 0.229164549, "k1Fast": 0.005035046, "k1Slow": 0.004510574 },
+      "EN": { "fracFast": 0.05, "k1Fast": 0.001, "k1Slow": 0.005 },
+      "E2": { "fracFast": 1, "k1Fast": 0.5, "k1Slow": 0 }
+    },
+    "formationFraction": {
+      "EB": 0.1092,
+      "EV": 0.0623,
+      "EC": 0.1173,
+      "EN": 0.12,
+      "E2": 1
+    },
+    "k2": {
+      "EB": 0.09,
+      "EV": 0.07,
+      "EC": 0.045,
+      "EN": 0.015,
+      "E2": 0
+    }
+  },
+  "oral": {
+    "kAbsE2": 0.32,
+    "kAbsEV": 0.05,
+    "bioavailability": 0.03,
+    "kAbsSL": 1.8
+  },
+  "sublingual": {
+    "tierOrder": ["quick", "casual", "standard", "strict"],
+    "tiers": {
+      "quick": { "theta": 0.01, "holdMinutes": 2 },
+      "casual": { "theta": 0.04, "holdMinutes": 5 },
+      "standard": { "theta": 0.11, "holdMinutes": 10 },
+      "strict": { "theta": 0.18, "holdMinutes": 15 }
+    }
+  },
+  "gel": {
+    "_model": "表面 → 皮肤储库 → 中央三室级联：M_s'=-(kPen+kLoss)M_s, M_skin'=kPen·M_s-kRel·M_skin, M_c'=kRel·M_skin-ke·M_c。涂抹时刻以外，洗掉 = 把表面剩余清零。",
+    "siteOrder": ["arm", "thigh", "scrotal", "abdomen"],
+    "siteFactors": { "arm": 1, "thigh": 1, "abdomen": 1.1, "scrotal": 8 },
+    "sigmaSat": 0.008,
+    "concRef": 1,
+    "densityFactorClamp": { "min": 0.5, "max": 2 },
+    "coApplicationOrder": ["none", "sunscreen", "moisturizer"],
+    "coApplicationFactors": { "none": 1, "sunscreen": 0.84, "moisturizer": 1.38 },
+    "defaultProductId": 1,
+    "products": [
+      {
+        "id": 1,
+        "name": "Oestrogel",
+        "concentrationMGmL": 0.6,
+        "defaultAreaCM2": 750,
+        "refDoseMG": 1.5,
+        "kPenBase": 0.14,
+        "kLoss": 1.26,
+        "kRel": 0.022
+      },
+      {
+        "id": 2,
+        "name": "Estreva",
+        "concentrationMGmL": 1,
+        "defaultAreaCM2": 400,
+        "refDoseMG": 1.5,
+        "kPenBase": 0.154,
+        "kLoss": 1.246,
+        "kRel": 0.022
+      },
+      {
+        "id": 3,
+        "name": "Estrogel",
+        "concentrationMGmL": 0.6,
+        "defaultAreaCM2": 750,
+        "refDoseMG": 1.5,
+        "kPenBase": 0.14,
+        "kLoss": 1.26,
+        "kRel": 0.022
+      },
+      {
+        "id": 4,
+        "name": "Divigel",
+        "concentrationMGmL": 1,
+        "defaultAreaCM2": 200,
+        "refDoseMG": 1,
+        "kPenBase": 0.168,
+        "kLoss": 1.232,
+        "kRel": 0.024
+      },
+      {
+        "id": 5,
+        "name": "DIY",
+        "concentrationMGmL": 1,
+        "defaultAreaCM2": 400,
+        "refDoseMG": 2,
+        "kPenBase": 0.112,
+        "kLoss": 1.288,
+        "kRel": 0.022
+      }
+    ],
+    "palmAreaCM2": 175,
+    "coverageTemplates": [
+      { "key": "product", "kind": "product" },
+      { "key": "palm1", "kind": "fixed", "areaCM2": 175 },
+      { "key": "palm2", "kind": "fixed", "areaCM2": 350 },
+      { "key": "palm3", "kind": "fixed", "areaCM2": 525 },
+      { "key": "thigh", "kind": "fixed", "areaCM2": 200 },
+      { "key": "arm", "kind": "fixed", "areaCM2": 750 },
+      { "key": "arms2", "kind": "fixed", "areaCM2": 1500 },
+      { "key": "manual", "kind": "manual" }
+    ]
+  },
+  "patch": {
+    "fallbackK1": 0.0075,
+    "formationFraction": 1
+  },
+  "_gaps": {
+    "antiandrogens": "CPA 二室（F 0.7, k3 0.017 等）与比卡鲁胺单室在 v0.1 未实现，见 ROADMAP v0.3。",
+    "EU": "十一酸雌二醇走单段慢储库（releaseScale/kCleave），本引擎不支持，因 builtin 目录也没有该化合物。"
+  }
+}

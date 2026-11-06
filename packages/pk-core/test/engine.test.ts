@@ -394,6 +394,33 @@ describe('builtin 引擎：非注射途径', () => {
     expect(Math.abs(result.auc - expected) / expected).toBeLessThan(5e-3)
   })
 
+  test('睾酮贴片：标称释放量需要 patchReleaseScale 才能对上实测暴露', () => {
+    const weightKG = 62
+    const wearHours = 72
+    const rateUgPerDay = 4000 // 4mg/日 的睾酮贴片
+    const result = simulate(
+      [
+        {
+          takenAt: T0,
+          compound: 'T',
+          route: 'patchApply',
+          doseEquivMG: 0,
+          extras: { releaseRateUgPerDay: rateUgPerDay },
+        },
+        { takenAt: T0 + wearHours * H, compound: 'T', route: 'patchRemove', doseEquivMG: 0 },
+      ],
+      { hormone: 'testosterone', weightKG, startMS: T0, endMS: T0 + 200 * H, stepMin: 15 },
+    )
+    const tScale = catalog.hormones.testosterone?.patchReleaseScale ?? 1
+    // 稳态浓度 = 通量 × 释放校正 / 清除率；4mg/日 实测约 500–800 ng/dL。
+    const tp = catalog.hormones.testosterone
+    const flux = ((rateUgPerDay * 1e-3) / 24) * tScale
+    const expected = (flux * 1e8) / ((tp?.vdPerKG ?? 2) * weightKG * 1000 * (tp?.kClear ?? 0.6))
+    expect(Math.abs(result.peak.conc - expected) / expected).toBeLessThan(0.05)
+    expect(result.peak.conc).toBeGreaterThan(450)
+    expect(result.peak.conc).toBeLessThan(900)
+  })
+
   test('贴片佩戴期间浓度上升，拆除后下降', () => {
     const wearHours = 48
     const result = simulate(
