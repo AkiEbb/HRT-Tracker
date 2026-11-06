@@ -1,0 +1,25 @@
+{
+  "events": [
+    {
+      "id": "t-1",
+      "route": "injection",
+      "timeH": 495000,
+      "doseMG": 5,
+      "ester": "EV",
+      "weightKG": 58,
+      "extras": {}
+    },
+    {
+      "id": "t-2",
+      "route": "gel",
+      "timeH": 495024,
+      "doseMG": 1.2,
+      "ester": "E2",
+      "weightKG": 59,
+      "extras": { "gelProductId": "g1", "areaCm2": 150 }
+    }
+  ],
+  "labResults": [{ "id": "t-lab-1", "timeH": 495048, "analyte": "E2", "concValue": 180, "unit": "pmol/l" }],
+  "gelProducts": [{ "id": "g1", "name": "Estrogel", "concentrationMGPerG": 0.6 }],
+  "bodyWeightKg": 60
+}

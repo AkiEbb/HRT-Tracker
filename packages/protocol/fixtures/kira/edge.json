@@ -1,0 +1,20 @@
+{
+  "format": "kira-hrt",
+  "version": 1,
+  "events": [
+    { "id": "ok-1", "timeH": 500000, "route": "oral", "ester": "EV", "doseMG": 2 },
+    { "id": "bad-route", "timeH": 500010, "route": "intramuscular", "ester": "EV", "doseMG": 5 },
+    { "id": "bad-time", "timeH": null, "route": "oral", "ester": "E2", "doseMG": 1 },
+    { "id": "bad-dose", "timeH": 500020, "route": "oral", "ester": "E2", "doseMG": true },
+    { "id": "zero-dose", "timeH": 500030, "route": "oral", "ester": "E2", "doseMG": 0 },
+    { "id": "unknown-ester", "timeH": 500040, "route": "injection", "ester": "EU", "doseMG": 4 },
+    { "id": "no-id", "timeH": 500050, "route": "gel", "ester": "E2", "doseMG": 0.5 }
+  ],
+  "labResults": [
+    { "id": "legacy-e2", "timeH": 500060, "concValue": 120, "unit": "pg/ml" },
+    { "id": "legacy-t", "timeH": 500070, "concValue": 55, "unit": "ng/dl" },
+    { "id": "explicit-unknown", "timeH": 500080, "concValue": 9, "unit": "pg/ml", "analyte": "unknown" },
+    { "id": "empty-lab", "timeH": 500090 },
+    { "id": "monitoring-only", "timeH": 500100, "alt": 22, "altUln": 40 }
+  ]
+}

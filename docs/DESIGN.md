@@ -32,20 +32,23 @@
 
 ## 2. 技术栈
 
-| 层 | 选择 | 备注 |
-|---|---|---|
-| 框架 | Nuxt 4（Nitro v2） | Workers 用 `cloudflare_module` preset，compatibility date ≥ `2024-09-19` |
-| 样式 | Tailwind CSS v4（`@tailwindcss/vite`） | 无 `postcss.config`，v4 走 Vite 插件 |
-| 组件 | `@nuxt/ui` v3 | 建在 reka-ui + Tailwind v4 上，主题走 `app.config.ts` tokens |
-| 图表 | **uPlot**（≈45KB min） | 高密度时间序列 + 双模型叠加对比 |
-| PK 计算 | **Web Worker** | 主线程只发消息，避免低端安卓卡输入 |
-| 数据层 | **Drizzle ORM + drizzle-kit** | 三方言：`d1` / `better-sqlite3` / `node-postgres` |
-| 口令哈希 | **Argon2id via `hash-wasm`** | Workers 无原生 Argon2；WASM 在两端都能跑 |
-| 加密 | WebCrypto（AES-256-GCM、HKDF） | 只用标准 API，不引第三方密码库 |
-| i18n | `@nuxtjs/i18n` | v0.1 只 `zh-Hans` + `en` |
-| 工具链 | **bun 1.4** + **Biome** | 与 `AkiEbb/blog` 一致 |
-| 测试 | `bun test`（单元）+ Vitest（组件）+ Playwright（E2E） | 金标准夹具见 §8.4 |
-| 发布 | `git-cliff`（Conventional Commits） | `cliff.toml` 已就位 |
+| 层       | 选择                                                  | 备注                                                                                                               |
+| -------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 框架     | Nuxt 4（Nitro v2）                                    | Workers 用 `cloudflare_module` preset，compatibility date ≥ `2024-09-19`                                           |
+| 样式     | Tailwind CSS v4（`@tailwindcss/vite`）                | 无 `postcss.config`，v4 走 Vite 插件                                                                               |
+| 组件     | `@nuxt/ui` **v4**                                     | 建在 reka-ui + Tailwind v4 上，主题走 `app.config.ts` tokens；`tailwindcss` 必须显式装在本包（不能靠传递依赖解析） |
+| 图表     | **uPlot**（≈45KB min）                                | 高密度时间序列 + 双模型叠加对比                                                                                    |
+| PK 计算  | **Web Worker**                                        | 主线程只发消息，避免低端安卓卡输入                                                                                 |
+| 数据层   | **Drizzle ORM + drizzle-kit**                         | 三方言：`d1` / `better-sqlite3` / `node-postgres`                                                                  |
+| 口令哈希 | **Argon2id via `hash-wasm`**                          | Workers 无原生 Argon2；WASM 在两端都能跑                                                                           |
+| 加密     | WebCrypto（AES-256-GCM、HKDF）                        | 只用标准 API，不引第三方密码库                                                                                     |
+| i18n     | `@nuxtjs/i18n`                                        | v0.1 只 `zh-Hans` + `en`                                                                                           |
+| 工具链   | **bun 1.4** + **Biome**                               | 与 `AkiEbb/blog` 一致                                                                                              |
+| 测试     | `bun test`（单元）+ Vitest（组件）+ Playwright（E2E） | 金标准夹具见 §8.4                                                                                                  |
+| 发布     | `git-cliff`（Conventional Commits）                   | `cliff.toml` 已就位                                                                                                |
+
+**实际锁定**（2026-11-06 `bun install`）：nuxt 4.6.4 · Nitro 2.13.6 · Vite 8.3.6 · Vue 3.5.45 · vue-router 5.4.0 · `@nuxt/ui` 4.12.0 · tailwindcss 4.3.5 · bun 1.4.2。
+版本以 `bun.lock` 为准；本节只记录「当时为什么选它」，不重复记版本号。
 
 ---
 
@@ -72,9 +75,10 @@ HRT-Tracker/
 
 **约定**：`packages/*` 不做构建步骤，`exports` 直指 `src/index.ts`，由 Nitro/Vite 打包。
 
-> ⚠️ **已知摩擦点**：Nitro 默认把 `node_modules` 视为外部依赖，TS-only workspace 包必须显式内联
-> （`vite.ssr.noExternal` 或 `nitro.externals.inline`）。**Cloudflare 构建在这里最容易翻车**——它是 v0.1 的第一个技术风险。
-> 退路（半天内解决不了就走）：把三个包挪进 `apps/web/shared/`，边界设计不变。
+> ✅ **已验证（v0.1 第一周）**：两处同时声明后，`node-server` 与 `cloudflare_module` 双目标均构建成功，
+> 且分别在 node 与 workerd（`wrangler dev --local`）上实测返回同一份数据。
+> **关键：只写一处不够**——SSR 走 Vite 的解析器，Nitro 产物走 rollup 的解析器，两边都要放行：
+> `nitro.externals.inline` + `vite.ssr.noExternal`。少一边，问题会推迟到部署时才炸。
 
 ---
 
@@ -82,12 +86,12 @@ HRT-Tracker/
 
 ### 4.1 术语
 
-| 术语 | 取值 | 说明 |
-|---|---|---|
-| `category` | `estradiol` / `testosterone` / `antiAndrogen` | 上游模型的一等公民；`antiAndrogen` 只记录、不建模 |
-| `compound` | `E2 EB EV EC EN EU` / `T TC TE TU` / `CPA ...` | 统一替代上游的 `ester`，为睾酮留位 |
-| `route` | `injection` `oral` `sublingual` `gel` `patchApply` `patchRemove` | 与上游一致，不多不少 |
-| `unit` | `pg/ml` `pmol/l`（E2）× `ng/dl` `nmol/l`（T） | 单位与 `analyte` 解耦 |
+| 术语       | 取值                                                             | 说明                                              |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| `category` | `estradiol` / `testosterone` / `antiAndrogen`                    | 上游模型的一等公民；`antiAndrogen` 只记录、不建模 |
+| `compound` | `E2 EB EV EC EN EU` / `T TC TE TU` / `CPA ...`                   | 统一替代上游的 `ester`，为睾酮留位                |
+| `route`    | `injection` `oral` `sublingual` `gel` `patchApply` `patchRemove` | 与上游一致，不多不少                              |
+| `unit`     | `pg/ml` `pmol/l`（E2）× `ng/dl` `nmol/l`（T）                    | 单位与 `analyte` 解耦                             |
 
 ### 4.2 剂量：**两个字段，永不合流**
 
@@ -98,11 +102,11 @@ HRT-Tracker/
 
 因此内部 schema 强制拆开：
 
-| 字段 | 类型 | 语义 |
-|---|---|---|
-| `doseMG` | number | **原始药物质量**，用户输入什么就是什么 |
-| `doseEquivMG` | number | **活性当量**，由 `compound` 的 `toActiveFactor`（catalog 提供）换算 |
-| `equivOverridden` | boolean | 用户手工改过当量时为 `true`，禁止再自动覆盖 |
+| 字段              | 类型    | 语义                                                                |
+| ----------------- | ------- | ------------------------------------------------------------------- |
+| `doseMG`          | number  | **原始药物质量**，用户输入什么就是什么                              |
+| `doseEquivMG`     | number  | **活性当量**，由 `compound` 的 `toActiveFactor`（catalog 提供）换算 |
+| `equivOverridden` | boolean | 用户手工改过当量时为 `true`，禁止再自动覆盖                         |
 
 规则：
 
@@ -110,20 +114,22 @@ HRT-Tracker/
 2. 换算因子**只存在于 catalog JSON**，代码里不得出现魔法数字。
 3. 导出到 `kira-hrt` 时写 `doseMG`（原始量）；从 `kira-hrt` 导入时按 `ester` 查 catalog 换算出 `doseEquivMG`。
 4. 契约测试：任取 N 条记录做 `import → export` 往返，`doseMG` 必须逐条等值（见 §8.4）。
+5. 抗雄（`category = antiAndrogen`）**没有当量**：`doseEquivMG` 恒为 `0`，因为它对 E2/T 曲线的贡献就是 0。
+   拿它的 `doseMG` 冒充当量，会把「50mg 色普龙」画成「50mg 雌二醇」——这是这类项目最贵的一类错误。
 
 ### 4.3 信封（服务端可见的部分）
 
 ```ts
 interface Envelope {
-  id: string;          // UUIDv7（时间有序，便于分页）
-  userId: string;
-  kind: 'dose' | 'lab' | 'scalar' | 'tombstone';
-  takenAt: number | null;   // epoch ms；标量与墓碑为 null
-  rev: number;         // 单调递增，CAS 依据
-  deviceId: string;
-  updatedAt: number;   // 服务端时钟，仅用于游标分页，**不用于裁决**
-  iv: string;          // base64，AES-GCM 96-bit
-  ct: string;          // base64，ciphertext || tag
+  id: string // UUIDv7（时间有序，便于分页）
+  userId: string
+  kind: 'dose' | 'lab' | 'scalar' | 'tombstone'
+  takenAt: number | null // epoch ms；标量与墓碑为 null
+  rev: number // 单调递增，CAS 依据
+  deviceId: string
+  updatedAt: number // 服务端时钟，仅用于游标分页，**不用于裁决**
+  iv: string // base64，AES-GCM 96-bit
+  ct: string // base64，ciphertext || tag
 }
 ```
 
@@ -133,23 +139,24 @@ interface Envelope {
 
 **dose**
 
-| 字段 | 必填 | 说明 |
-|---|---|---|
-| `compound` `category` `route` | ✓ | 见 §4.1 |
-| `doseMG` `doseEquivMG` | ✓ | 见 §4.2 |
-| `extras` | | 途径相关：`{ areaCm2?, releaseRateUgPerDay?, holdMinutes?, theta?, site?, batchNo? }` |
-| `note` | | 自由文本 |
-| `tzOffsetMin` | | 记录时刻的本地偏移，用于正确显示与提醒 |
-| `clientUpdatedAt` | ✓ | 客户端时钟，**冲突裁决用这个** |
+| 字段                          | 必填 | 说明                                                                                  |
+| ----------------------------- | ---- | ------------------------------------------------------------------------------------- |
+| `compound` `category` `route` | ✓    | 见 §4.1                                                                               |
+| `doseMG` `doseEquivMG`        | ✓    | 见 §4.2                                                                               |
+| `extras`                      |      | 途径相关：`{ areaCm2?, releaseRateUgPerDay?, holdMinutes?, theta?, site?, batchNo? }` |
+| `note`                        |      | 自由文本                                                                              |
+| `tzOffsetMin`                 |      | 记录时刻的本地偏移，用于正确显示与提醒                                                |
+| `weightKG`                    |      | 给药**当时**的体重（上游两种工具都按事件存）；缺失时回落备份级 `bodyWeightKg`         |
+| `clientUpdatedAt`             | ✓    | 客户端时钟，**冲突裁决用这个**                                                        |
 
 **lab**
 
-| 字段 | 必填 | 说明 |
-|---|---|---|
-| `analyte` | ✓ | `E2` / `T` / `unknown`。**权威字段，不按单位猜** |
-| `concValue` `unit` | | 只含监测项时省略 |
-| `monitoring` | | `{ prolactin?, prolactinUln?, alt?, altUln?, ast?, potassium? }` |
-| `labNote` | | |
+| 字段               | 必填 | 说明                                                             |
+| ------------------ | ---- | ---------------------------------------------------------------- |
+| `analyte`          | ✓    | `E2` / `T` / `unknown`。**权威字段，不按单位猜**                 |
+| `concValue` `unit` |      | 只含监测项时省略                                                 |
+| `monitoring`       |      | `{ prolactin?, prolactinUln?, alt?, altUln?, ast?, potassium? }` |
+| `labNote`          |      |                                                                  |
 
 > `unknown` 保留、可编辑、可导出，但**不进入任何拟合**（E2 / T / 背景 E2）。既无激素值又无监测项的记录直接丢弃。
 > 类型补全只在"字段缺失"时发生，显式 `unknown` 永不覆盖。
@@ -198,12 +205,12 @@ interface Envelope {
 
 ### 5.2 四种登录方式如何与 E2EE 共存
 
-| 方式 | 认证 | 解密 | 备注 |
-|---|---|---|---|
-| 邮箱 + 口令 | ✓（Argon2id 校验） | ✓（派生 KEK） | 主路径 |
-| TOTP | 第二步验证 | 不参与 | 与口令叠加 |
-| OIDC（GitHub/Google/自建） | ✓ | ✗ | **登录后仍需输安全密码**，UI 必须明说 |
-| Passkey / WebAuthn | ✓ | 可选（PRF 扩展派生 KEK） | PRF 支持矩阵：Chromium / Safari 支持，Firefox 至今无 → 必须能力探测并降级 |
+| 方式                       | 认证               | 解密                     | 备注                                                                      |
+| -------------------------- | ------------------ | ------------------------ | ------------------------------------------------------------------------- |
+| 邮箱 + 口令                | ✓（Argon2id 校验） | ✓（派生 KEK）            | 主路径                                                                    |
+| TOTP                       | 第二步验证         | 不参与                   | 与口令叠加                                                                |
+| OIDC（GitHub/Google/自建） | ✓                  | ✗                        | **登录后仍需输安全密码**，UI 必须明说                                     |
+| Passkey / WebAuthn         | ✓                  | 可选（PRF 扩展派生 KEK） | PRF 支持矩阵：Chromium / Safari 支持，Firefox 至今无 → 必须能力探测并降级 |
 
 > 这条是"四种登录都做"与"真 E2EE"的接缝：**OIDC 提供了便利，但永远不能单独解锁数据**。用户界面上 `OIDC 登录 → 输入安全密码` 的两段式必须显式，不能伪装成一次登录。
 
@@ -219,16 +226,16 @@ interface Envelope {
 
 ### 6.1 表（明文元数据，服务端可见）
 
-| 表 | 关键列 |
-|---|---|
-| `users` | `id`, `created_at`, `dek_wrapped_kek`, `dek_wrapped_recovery`, `kdf_salt_a`, `kdf_salt_b`, `kdf_params` |
-| `credentials` | `user_id`, `password_hash`(Argon2id PHC 串), `totp_secret_ct`, `totp_enabled` |
-| `oidc_links` | `user_id`, `issuer`, `subject`, `email_hint` |
-| `passkeys` | `user_id`, `credential_id`, `public_key`, `sign_count`, `prf_capable` |
-| `sessions` | `id`, `user_id`, `token_hash`(SHA-256), `device_label`, `created_at`, `last_seen`, `expires_at`, `revoked_at` |
-| `invite_codes` | `code_hash`, `created_by`, `used_by`, `expires_at` |
-| `reminders` | `user_id`, `next_fire_at`, `payload_ct`（提醒内容也加密） |
-| `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth` |
+| 表                   | 关键列                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `users`              | `id`, `created_at`, `dek_wrapped_kek`, `dek_wrapped_recovery`, `kdf_salt_a`, `kdf_salt_b`, `kdf_params`       |
+| `credentials`        | `user_id`, `password_hash`(Argon2id PHC 串), `totp_secret_ct`, `totp_enabled`                                 |
+| `oidc_links`         | `user_id`, `issuer`, `subject`, `email_hint`                                                                  |
+| `passkeys`           | `user_id`, `credential_id`, `public_key`, `sign_count`, `prf_capable`                                         |
+| `sessions`           | `id`, `user_id`, `token_hash`(SHA-256), `device_label`, `created_at`, `last_seen`, `expires_at`, `revoked_at` |
+| `invite_codes`       | `code_hash`, `created_by`, `used_by`, `expires_at`                                                            |
+| `reminders`          | `user_id`, `next_fire_at`, `payload_ct`（提醒内容也加密）                                                     |
+| `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth`                                                                       |
 
 ### 6.2 会话
 
@@ -293,22 +300,22 @@ tombstone 是普通记录（`kind='tombstone'`），走同一条 CAS 路径。�
 
 ### 8.1 兼容矩阵
 
-| 优先级 | 来源 | 格式 | 夹具来源 |
-|---|---|---|---|
-| **P0** | Transmtf | 明文 / 密码加密 JSON | 自建（可复现） |
-| **P0** | Kira HRT | `format:"kira-hrt"`、`meta.version:3` | 自建（可复现） |
-| **P1** | Featherline | `.hrtbackup`（加密） | **需真实脱敏样本** |
-| **P1** | Oyama 派生 | Oyama 备份 JSON | 需样本 |
-| **P2** | 通用 CSV | 表头映射 | 自建 |
+| 优先级 | 来源        | 格式                                  | 夹具来源           |
+| ------ | ----------- | ------------------------------------- | ------------------ |
+| **P0** | Transmtf    | 明文 / 密码加密 JSON                  | 自建（可复现）     |
+| **P0** | Kira HRT    | `format:"kira-hrt"`、`meta.version:3` | 自建（可复现）     |
+| **P1** | Featherline | `.hrtbackup`（加密）                  | **需真实脱敏样本** |
+| **P1** | Oyama 派生  | Oyama 备份 JSON                       | 需样本             |
+| **P2** | 通用 CSV    | 表头映射                              | 自建               |
 
 P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测出边界（`docs/ROADMAP.md` 里列为外部依赖）。
 
 ### 8.2 导出
 
-| 格式 | 内容 | 风险控制 |
-|---|---|---|
-| `kira-hrt`（明文） | 记录 + 化验 + 体重 | 导出前**强制二次确认**，文案写明"生成未加密的健康数据文件" |
-| `hrt-tracker.bak`（加密） | 全量记录 + `dek_wrapped_*` + 元数据 | 需输入安全密码或恢复短语；用于换设备/灾备 |
+| 格式                      | 内容                                | 风险控制                                                   |
+| ------------------------- | ----------------------------------- | ---------------------------------------------------------- |
+| `kira-hrt`（明文）        | 记录 + 化验 + 体重                  | 导出前**强制二次确认**，文案写明"生成未加密的健康数据文件" |
+| `hrt-tracker.bak`（加密） | 全量记录 + `dek_wrapped_*` + 元数据 | 需输入安全密码或恢复短语；用于换设备/灾备                  |
 
 ### 8.3 字段映射要点
 
@@ -335,10 +342,10 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 
 ### 9.1 两份真源，一份 catalog
 
-| 引擎 | 参数来源 | 覆盖 |
-|---|---|---|
-| `builtin` | HRT-Recorder 的 `PKSharedCatalog.json`（算法/参数按规格实现，**不搬实现代码**） | E2 + T + 抗雄 |
-| `transmtf` | Transmtf-HRT-Tracker（MIT）的 `pk.ts` 参数与扩展 | 仅 E2 + 两种抗雄 |
+| 引擎       | 参数来源                                                                        | 覆盖             |
+| ---------- | ------------------------------------------------------------------------------- | ---------------- |
+| `builtin`  | HRT-Recorder 的 `PKSharedCatalog.json`（算法/参数按规格实现，**不搬实现代码**） | E2 + T + 抗雄    |
+| `transmtf` | Transmtf-HRT-Tracker（MIT）的 `pk.ts` 参数与扩展                                | 仅 E2 + 两种抗雄 |
 
 两者都归一到同一份 `catalog.json` 结构（`hormone` / `compound` / `route` 三级），差异用字段表达而非分支代码。
 
@@ -383,10 +390,10 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 
 ### 11.1 分两级
 
-| 阶段 | 机制 | 说明 |
-|---|---|---|
-| v0.3 | 本地通知（Service Worker 排程 + 打开应用时校准） | 无服务端依赖，安卓 Chrome 可靠 |
-| v1.0 | Web Push（VAPID）+ Workers Cron（**最小粒度 1 分钟**） | 免费套餐每次触发算一次请求 |
+| 阶段 | 机制                                                   | 说明                           |
+| ---- | ------------------------------------------------------ | ------------------------------ |
+| v0.3 | 本地通知（Service Worker 排程 + 打开应用时校准）       | 无服务端依赖，安卓 Chrome 可靠 |
+| v1.0 | Web Push（VAPID）+ Workers Cron（**最小粒度 1 分钟**） | 免费套餐每次触发算一次请求     |
 
 ### 11.2 调度
 
@@ -414,16 +421,16 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 
 ## 13. 双部署
 
-| 能力 | Cloudflare Workers | VPS（默认） |
-|---|---|---|
-| Nitro preset | `cloudflare_module` | `node-server` |
-| SQL | D1（**无交互事务**、单语句 ≤100 参数、batch 原子） | SQLite（`better-sqlite3`，真事务） |
-| 备选 SQL | — | PostgreSQL（`node-postgres`，`DATABASE_URL`） |
-| KV | KV（最终一致 ≤60s） | `storage_kv` 表（强一致）或 Redis（可选） |
-| 定时 | Cron Triggers（≥1min） | systemd timer / `node-cron` |
-| 静态资源 | Workers Assets | 反代静态目录 |
-| 密钥 | `wrangler secret put` | `.env`（`0600`）或 systemd `EnvironmentFile` |
-| 迁移 | `drizzle-kit generate --dialect sqlite` → `wrangler d1 migrations apply` | 同一份 sqlite 迁移；pg 单独一套 |
+| 能力         | Cloudflare Workers                                                       | VPS（默认）                                   |
+| ------------ | ------------------------------------------------------------------------ | --------------------------------------------- |
+| Nitro preset | `cloudflare_module`                                                      | `node-server`                                 |
+| SQL          | D1（**无交互事务**、单语句 ≤100 参数、batch 原子）                       | SQLite（`better-sqlite3`，真事务）            |
+| 备选 SQL     | —                                                                        | PostgreSQL（`node-postgres`，`DATABASE_URL`） |
+| KV           | KV（最终一致 ≤60s）                                                      | `storage_kv` 表（强一致）或 Redis（可选）     |
+| 定时         | Cron Triggers（≥1min）                                                   | systemd timer / `node-cron`                   |
+| 静态资源     | Workers Assets                                                           | 反代静态目录                                  |
+| 密钥         | `wrangler secret put`                                                    | `.env`（`0600`）或 systemd `EnvironmentFile`  |
+| 迁移         | `drizzle-kit generate --dialect sqlite` → `wrangler d1 migrations apply` | 同一份 sqlite 迁移；pg 单独一套               |
 
 **设计约束（因 D1 反推）**：
 
@@ -439,13 +446,13 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 
 ### 14.1 矩阵
 
-| job | 内容 | 目标 |
-|---|---|---|
-| `lint` | Biome + `tsc --noEmit` + i18n 键对称 | 全部 |
-| `unit` | `bun test`：crypto / pk-core（**对 Kira 夹具容差 1e-6**）/ protocol 金标准 | 全部 |
-| `node` | 构建 `node-server` + SQLite 集成 + Playwright E2E | VPS |
-| `cf-local` | `wrangler dev --local`（miniflare D1/KV）+ API 集成 | Workers |
-| `cf-preview` | 部署临时 preview + 5 条 smoke（登录/写一条/读回/导出/删除） | Workers |
+| job          | 内容                                                                       | 目标    |
+| ------------ | -------------------------------------------------------------------------- | ------- |
+| `lint`       | Biome + `tsc --noEmit` + i18n 键对称                                       | 全部    |
+| `unit`       | `bun test`：crypto / pk-core（**对 Kira 夹具容差 1e-6**）/ protocol 金标准 | 全部    |
+| `node`       | 构建 `node-server` + SQLite 集成 + Playwright E2E                          | VPS     |
+| `cf-local`   | `wrangler dev --local`（miniflare D1/KV）+ API 集成                        | Workers |
+| `cf-preview` | 部署临时 preview + 5 条 smoke（登录/写一条/读回/导出/删除）                | Workers |
 
 **miniflare ≠ 真 D1**：参数上限（100）与 batch 语义不完全等价，所以 `cf-preview` 不可省。
 
@@ -470,14 +477,14 @@ Conventional Commits（`feat:` / `fix:` / `docs:` / `chore:` …），`git-cliff
 
 ## 16. 威胁模型
 
-| 攻击者 | 能否读到明文 | 说明 |
-|---|---|---|
-| 拿到 DB dump | ✗ | 只有 AES-GCM 密文与 Argon2id 包裹对象，无任何可用密钥材料 |
-| 拿到 Cloudflare 账号 | ✗ | 无平台密钥可拿；KV/D1 里没有密钥材料 |
-| 服务运营者（本人） | ✗ | 这是设计目标，不是能力缺失 |
-| 拿到分享链接 | 视设置 | 无密码链接 = 可见；有密码 = 需密码 |
-| 用户设备被控 | ✓ | 内存中的 DEK。不防御，只在 UI 说明 |
-| 用户自己导出明文 | ✓ | `kira-hrt` 导出是明文，这是数据可携带权的代价 |
+| 攻击者               | 能否读到明文 | 说明                                                      |
+| -------------------- | ------------ | --------------------------------------------------------- |
+| 拿到 DB dump         | ✗            | 只有 AES-GCM 密文与 Argon2id 包裹对象，无任何可用密钥材料 |
+| 拿到 Cloudflare 账号 | ✗            | 无平台密钥可拿；KV/D1 里没有密钥材料                      |
+| 服务运营者（本人）   | ✗            | 这是设计目标，不是能力缺失                                |
+| 拿到分享链接         | 视设置       | 无密码链接 = 可见；有密码 = 需密码                        |
+| 用户设备被控         | ✓            | 内存中的 DEK。不防御，只在 UI 说明                        |
+| 用户自己导出明文     | ✓            | `kira-hrt` 导出是明文，这是数据可携带权的代价             |
 
 **日志纪律**：请求日志只记 `{ method, path, status, userId, durationMs, ciphertextBytes }`；永不记录 body、`iv`、`ct`、任何 header 里的 token。
 
@@ -485,45 +492,47 @@ Conventional Commits（`feat:` / `fix:` / `docs:` / `chore:` …），`git-cliff
 
 ## 17. 决定记录（ADR 摘要）
 
-| # | 决定 | 备选被否的理由 |
-|---|---|---|
-| 1 | 新仓库 `AkiEbb/HRT-Tracker`，Kira 只做维护 | 就地重写会撕裂现有发布链；monorepo 改造成本吃掉 MVP |
-| 2 | 从上游重写（Transmtf MIT + HRT-Recorder 规格），MIT 许可 | 移植 GPL 会绑定许可；重写换来许可自由 |
-| 3 | 完整平替，但分四阶段垂直切片 | 一次性铺开等于第二个两年 |
-| 4 | Drizzle + drizzle-kit 三方言 | 手写方言层维护成本高；Drizzle 换来同一 schema |
-| 5 | MIT | AGPL 在此场景杠杆价值低于社区门槛成本 |
-| 6 | 双部署双绿是每阶段硬门槛 | 最后再适配 = 存储层推倒重来 |
-| 7 | 真 E2EE（服务端零密钥副本） | Kira 式"KMS 包裹副本"会让隐私承诺落空 |
-| 8 | 口令 KEK + 恢复短语，OIDC/Passkey 只做认证 | 服务端 escrow 违背第 1 条铁律 |
-| 9 | 记录级信封 + 记录级 LWW | 整份快照在 D1 上是灾难；CRDT 对记录型数据无收益 |
-| 10 | 导入三档优先级（P0 可自建夹具） | 无法为没有样本的格式写测试 |
-| 11 | catalog 驱动 + 全局引擎 + 双曲线对比 | 每记录选引擎会让校准与缓存乘二 |
-| 12 | session 存 D1 | KV 最终一致使"立即登出"失真 |
-| 13 | VPS 默认 SQLite | pg 的运维面是纯负担 |
-| 14 | `@nuxt/ui` v3 | shadcn-vue 与它同源，二选一即可 |
-| 15 | 内部 schema 自有 + 边界适配 | 直接吃协议会让 `doseMG` 双重语义变成永久隐患 |
-| 16 | 只做 PWA | 壳会带来两套通知/密钥存储/导入 |
-| 17 | 客户端合并 + 服务端 CAS | 服务端 LWW 在 E2EE 下是自欺 |
-| 18 | 提醒两级推进 | 无 Cron 的免费方案撑不住每日漏服提醒 |
-| 19 | **砍掉 OCR** | 与 E2EE 无关的纯成本项，手工录入够用 |
-| 20 | 代码库中性名，品牌配置化 | 提前定品牌消耗一轮决策；去品牌化对受众有真实价值 |
-| 21 | 校准先只做 MAP | 估计器数量不决定信任，表达质量才决定 |
-| 22 | 分享默认安全侧 | 无密码链接必须显式开启且 24h 过期 |
-| 23 | i18n 先中英 | 质量差的多语言是医疗文案风险 |
-| 24 | CI 三段式（unit / node / cf-preview） | miniflare 与真 D1 不等价 |
-| 25 | 导出双格式 + 账号删除即硬删 | 软删与"已经删了"的承诺冲突 |
-| 26 | SSH 签名 + AkiEbb 身份 | 卡片 GPG 密钥绑的是 RhenCloud 身份，签不出 Verified |
-| 27 | 信任边界五条铁律写进文档 | 只活在对白里的约束等于没有约束 |
-| 28 | 两份文档（DESIGN + ROADMAP） | 文档越多越没人读 |
+| #   | 决定                                                     | 备选被否的理由                                             |
+| --- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| 1   | 新仓库 `AkiEbb/HRT-Tracker`，Kira 只做维护               | 就地重写会撕裂现有发布链；monorepo 改造成本吃掉 MVP        |
+| 2   | 从上游重写（Transmtf MIT + HRT-Recorder 规格），MIT 许可 | 移植 GPL 会绑定许可；重写换来许可自由                      |
+| 3   | 完整平替，但分四阶段垂直切片                             | 一次性铺开等于第二个两年                                   |
+| 4   | Drizzle + drizzle-kit 三方言                             | 手写方言层维护成本高；Drizzle 换来同一 schema              |
+| 5   | MIT                                                      | AGPL 在此场景杠杆价值低于社区门槛成本                      |
+| 6   | 双部署双绿是每阶段硬门槛                                 | 最后再适配 = 存储层推倒重来                                |
+| 7   | 真 E2EE（服务端零密钥副本）                              | Kira 式"KMS 包裹副本"会让隐私承诺落空                      |
+| 8   | 口令 KEK + 恢复短语，OIDC/Passkey 只做认证               | 服务端 escrow 违背第 1 条铁律                              |
+| 9   | 记录级信封 + 记录级 LWW                                  | 整份快照在 D1 上是灾难；CRDT 对记录型数据无收益            |
+| 10  | 导入三档优先级（P0 可自建夹具）                          | 无法为没有样本的格式写测试                                 |
+| 11  | catalog 驱动 + 全局引擎 + 双曲线对比                     | 每记录选引擎会让校准与缓存乘二                             |
+| 12  | session 存 D1                                            | KV 最终一致使"立即登出"失真                                |
+| 13  | VPS 默认 SQLite                                          | pg 的运维面是纯负担                                        |
+| 14  | `@nuxt/ui` v4                                            | shadcn-vue 与它同源，二选一即可；v4 已原生适配 Tailwind v4 |
+| 15  | 内部 schema 自有 + 边界适配                              | 直接吃协议会让 `doseMG` 双重语义变成永久隐患               |
+| 16  | 只做 PWA                                                 | 壳会带来两套通知/密钥存储/导入                             |
+| 17  | 客户端合并 + 服务端 CAS                                  | 服务端 LWW 在 E2EE 下是自欺                                |
+| 18  | 提醒两级推进                                             | 无 Cron 的免费方案撑不住每日漏服提醒                       |
+| 19  | **砍掉 OCR**                                             | 与 E2EE 无关的纯成本项，手工录入够用                       |
+| 20  | 代码库中性名，品牌配置化                                 | 提前定品牌消耗一轮决策；去品牌化对受众有真实价值           |
+| 21  | 校准先只做 MAP                                           | 估计器数量不决定信任，表达质量才决定                       |
+| 22  | 分享默认安全侧                                           | 无密码链接必须显式开启且 24h 过期                          |
+| 23  | i18n 先中英                                              | 质量差的多语言是医疗文案风险                               |
+| 24  | CI 三段式（unit / node / cf-preview）                    | miniflare 与真 D1 不等价                                   |
+| 25  | 导出双格式 + 账号删除即硬删                              | 软删与"已经删了"的承诺冲突                                 |
+| 26  | SSH 签名 + AkiEbb 身份                                   | 卡片 GPG 密钥绑的是 RhenCloud 身份，签不出 Verified        |
+| 27  | 信任边界五条铁律写进文档                                 | 只活在对白里的约束等于没有约束                             |
+| 28  | 两份文档（DESIGN + ROADMAP）                             | 文档越多越没人读                                           |
+| 29  | 抗雄当量恒为 0                                           | 用自身毫克数冒充当量会污染曲线与导出                       |
+| 30  | 体重按事件存（`weightKG`），标量只做回落                 | 上游两种工具都是这个模型；全局体重会让历史曲线随修改而漂移 |
 
 ---
 
 ## 18. 待定 / 已知缺口
 
-| 项 | 状态 | 触发条件 |
-|---|---|---|
-| Featherline / Oyama 夹具 | **缺样本** | 拿到脱敏样本后补 P1 |
-| Passkey PRF 支持矩阵 | 未实测 | v1.0 前用真机验证 Chromium/Safari/Firefox |
-| Nitro 打包 workspace TS 包的摩擦 | 未实测 | v0.1 第一周；退路见 §3 |
-| 通知在 iOS PWA 的实际可靠性 | 未实测 | v0.3 |
-| 睾酮在 Transmtf 引擎下的缺失 | 已知 | 男性化模式强制 builtin |
+| 项                               | 状态       | 触发条件                                                                   |
+| -------------------------------- | ---------- | -------------------------------------------------------------------------- |
+| Featherline / Oyama 夹具         | **缺样本** | 拿到脱敏样本后补 P1                                                        |
+| Passkey PRF 支持矩阵             | 未实测     | v1.0 前用真机验证 Chromium/Safari/Firefox                                  |
+| Nitro 打包 workspace TS 包的摩擦 | ✅ 已验证  | `nitro.externals.inline` + `vite.ssr.noExternal`，node 与 workerd 双实测绿 |
+| 通知在 iOS PWA 的实际可靠性      | 未实测     | v0.3                                                                       |
+| 睾酮在 Transmtf 引擎下的缺失     | 已知       | 男性化模式强制 builtin                                                     |

@@ -1,0 +1,58 @@
+{
+  "format": "kira-hrt",
+  "version": 1,
+  "events": [
+    {
+      "id": "ev-1",
+      "timeH": 490000,
+      "route": "injection",
+      "ester": "EV",
+      "doseMG": 5,
+      "extras": { "site": "thigh" }
+    },
+    {
+      "id": "ev-2",
+      "timeH": 490072,
+      "route": "gel",
+      "ester": "E2",
+      "doseMG": 1.5,
+      "extras": { "areaCm2": 200 }
+    },
+    {
+      "id": "ev-3",
+      "timeH": 490168,
+      "route": "patchApply",
+      "ester": "E2",
+      "doseMG": 0,
+      "extras": { "releaseRateUgPerDay": 100 }
+    },
+    {
+      "id": "ev-4",
+      "timeH": 490240,
+      "route": "sublingual",
+      "ester": "E2",
+      "doseMG": 2,
+      "note": "含服 10 分钟",
+      "extras": { "holdMinutes": 10, "theta": 0.11 }
+    }
+  ],
+  "labResults": [
+    {
+      "id": "lab-1",
+      "timeH": 490100,
+      "analyte": "E2",
+      "concValue": 145.2,
+      "unit": "pg/ml",
+      "prolactin": 12.3,
+      "prolactinUln": 25
+    },
+    {
+      "id": "lab-2",
+      "timeH": 490200,
+      "analyte": "T",
+      "concValue": 48.1,
+      "unit": "ng/dl"
+    }
+  ],
+  "bodyWeightKg": 62
+}

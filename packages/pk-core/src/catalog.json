@@ -1,0 +1,148 @@
+{
+  "_source": {
+    "name": "HRT-Recorder PKSharedCatalog",
+    "upstream": "https://github.com/LaoZhong-Mihari/HRT-Recorder-PKcomponent-Test",
+    "retrieved": "2026-11-06",
+    "note": "数值是药代动力学规格本身（分子量、清除率、吸收分数），按规格重新实现，未复制上游实现代码。活性当量因子不预先烘焙，运行时由 activeMolecularWeight / molecularWeight 推导。"
+  },
+  "hormones": {
+    "estradiol": {
+      "displayName": "Estradiol",
+      "concentrationUnit": "pgPerML",
+      "vdPerKG": 2,
+      "kClear": 0.41,
+      "kClearInjection": 0.041,
+      "depotK1Corr": 1,
+      "patchFallbackK1": 0.0075,
+      "gelK1": 0.022,
+      "gelFmax": 0.06
+    },
+    "testosterone": {
+      "displayName": "Testosterone",
+      "concentrationUnit": "ngPerDL",
+      "vdPerKG": 2,
+      "kClear": 0.6,
+      "kClearInjection": 0.03,
+      "depotK1Corr": 1,
+      "patchFallbackK1": 0.0051,
+      "patchReleaseScale": 3.5078419552373226,
+      "gelK1": 0.05534590723252352,
+      "gelFmax": 0.22613930825011333
+    }
+  },
+  "compounds": {
+    "E2": {
+      "fullName": "Estradiol",
+      "hormone": "estradiol",
+      "molecularWeight": 272.38,
+      "activeMolecularWeight": 272.38,
+      "isProdrug": false
+    },
+    "EB": {
+      "fullName": "Estradiol Benzoate",
+      "hormone": "estradiol",
+      "molecularWeight": 376.5,
+      "activeMolecularWeight": 272.38,
+      "isProdrug": true
+    },
+    "EV": {
+      "fullName": "Estradiol Valerate",
+      "hormone": "estradiol",
+      "molecularWeight": 356.5,
+      "activeMolecularWeight": 272.38,
+      "isProdrug": true
+    },
+    "EC": {
+      "fullName": "Estradiol Cypionate",
+      "hormone": "estradiol",
+      "molecularWeight": 396.58,
+      "activeMolecularWeight": 272.38,
+      "isProdrug": true
+    },
+    "EN": {
+      "fullName": "Estradiol Enanthate",
+      "hormone": "estradiol",
+      "molecularWeight": 384.56,
+      "activeMolecularWeight": 272.38,
+      "isProdrug": true
+    },
+    "T": {
+      "fullName": "Testosterone",
+      "hormone": "testosterone",
+      "molecularWeight": 288.42,
+      "activeMolecularWeight": 288.42,
+      "isProdrug": false
+    },
+    "TC": {
+      "fullName": "Testosterone Cypionate",
+      "hormone": "testosterone",
+      "molecularWeight": 412.61,
+      "activeMolecularWeight": 288.42,
+      "isProdrug": true
+    },
+    "TE": {
+      "fullName": "Testosterone Enanthate",
+      "hormone": "testosterone",
+      "molecularWeight": 400.59,
+      "activeMolecularWeight": 288.42,
+      "isProdrug": true
+    },
+    "TU": {
+      "fullName": "Testosterone Undecanoate",
+      "hormone": "testosterone",
+      "molecularWeight": 456.7,
+      "activeMolecularWeight": 288.42,
+      "isProdrug": true
+    }
+  },
+  "twoPartDepot": {
+    "EB": { "fracFast": 0.9, "k1Fast": 0.144, "k1Slow": 0.114 },
+    "EV": { "fracFast": 0.4, "k1Fast": 0.0216, "k1Slow": 0.0138 },
+    "EC": { "fracFast": 0.229164549, "k1Fast": 0.005035046, "k1Slow": 0.004510574 },
+    "EN": { "fracFast": 0.05, "k1Fast": 0.001, "k1Slow": 0.005 },
+    "TC": { "fracFast": 0.35, "k1Fast": 0.016, "k1Slow": 0.0018 },
+    "TE": { "fracFast": 0.35, "k1Fast": 0.022, "k1Slow": 0.0035 },
+    "TU": { "fracFast": 0.3, "k1Fast": 0.005, "k1Slow": 0.001127743154530867 }
+  },
+  "formationFraction": {
+    "EB": 0.10922376473734707,
+    "EV": 0.062258288229969413,
+    "EC": 0.117255838,
+    "EN": 0.12,
+    "TC": 0.06775603562678995,
+    "TE": 0.09963018136697789,
+    "TU": 0.12940928580278235
+  },
+  "hydrolysisK2": {
+    "EB": 0.09,
+    "EV": 0.07,
+    "EC": 0.045,
+    "EN": 0.015,
+    "TC": 0.06,
+    "TE": 0.12,
+    "TU": 0.015
+  },
+  "oral": {
+    "kAbs": { "E2": 0.32, "EV": 0.05, "TU": 0.2162055136986597 },
+    "bioavailability": { "E2": 0.03, "EV": 0.03, "TU": 0.02698781505574721 },
+    "dualAbsorption": {
+      "TU": {
+        "fracFast": 1,
+        "kAbsFast": 0.450550912583251,
+        "kAbsSlow": 0.0142806935343998,
+        "bioavailabilityFast": 0.025919316335729803,
+        "bioavailabilitySlow": 0,
+        "kClear": 0.44024417908217306,
+        "lagHoursFast": 2.75,
+        "lagHoursSlow": 0
+      }
+    },
+    "kAbsSL": 1.8
+  },
+  "sublingual": {
+    "recommendedTheta": { "quick": 0.01, "casual": 0.04, "standard": 0.11, "strict": 0.18 },
+    "holdMinutes": { "quick": 2, "casual": 5, "standard": 10, "strict": 15 },
+    "thetaRangeLow": { "quick": 0.004, "casual": 0.021, "standard": 0.064, "strict": 0.115 },
+    "thetaRangeHigh": { "quick": 0.012, "casual": 0.057, "standard": 0.156, "strict": 0.253 }
+  }
+}

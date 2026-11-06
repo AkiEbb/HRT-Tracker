@@ -17,12 +17,11 @@
     "format": "biome format --write .",
     "typecheck": "bun run --filter '*' typecheck",
     "check:i18n": "bun scripts/check-i18n.mjs",
-    "db:generate:sqlite": "drizzle-kit generate --dialect sqlite --schema packages/db/src/schema.sqlite.ts --out deploy/migrations/sqlite",
-    "db:generate:pg": "drizzle-kit generate --dialect postgresql --schema packages/db/src/schema.pg.ts --out deploy/migrations/pg",
     "changelog": "git-cliff -o CHANGELOG.md"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
+    "@types/bun": "~1.3.0",
     "typescript": "^5.9.0"
   },
   "engines": {
