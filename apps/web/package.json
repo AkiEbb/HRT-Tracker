@@ -17,6 +17,7 @@
     "@hrt/protocol": "workspace:*",
     "@nuxt/ui": "^4.12.0",
     "nuxt": "^4.6.4",
+    "uplot": "^1.6.32",
     "vue": "^3.5.45",
     "vue-router": "^5.4.0"
   },

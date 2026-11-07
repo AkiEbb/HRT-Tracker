@@ -426,10 +426,16 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 // 请求
 { id: string, type: 'simulate', engine: 'builtin'|'transmtf', doses: Dose[], range: [number, number], stepMin: number, pkParams: PkParams }
 // 响应
-{ id, type: 'result', series: { t: Float64Array, conc: Float64Array }, auc: number } | { id, type: 'error', message }
+{ id, type: 'result', engine, unit: 'pg/ml'|'ng/dl', series: { t: Float64Array, conc: Float64Array }, auc, peak: { conc, tMS }, warnings: string[] } | { id, type: 'error', message: string }
 ```
 
 主线程**不做任何** PK 计算。曲线点数按 `stepMin` 与视图宽度裁剪，缩放时只重算可见窗口。
+
+协议层三条硬约束（都有对应测试）：
+
+1. **Worker 消息是不可信输入。** `parsePkWorkerRequest` 逐字段校验形状，不合法就抛错，绝不 `as` 进引擎。
+2. **一个请求不叫“最新”。** 双引擎对比天然是两个并发请求，拿一个全局序号去判过期会把先回来的那条吞掉（builtin 就这样整条消失过）。过期判定属于**页面**：只有它知道这次请求对应哪一次选择（`pages/index.vue` 的 `generation`）。
+3. **图表只负责画。** 曲线集合（条数与颜色）变化才重建 uPlot 实例；同一集合的数据更新用 `setData(data, true)`（`true` = 重算 y 范围）。传 `false` 会沿用上一次的纵向尺度，贴片曲线就被画进注射量级的坐标系里，看着像一条贴着底边的直线。
 
 ---
 

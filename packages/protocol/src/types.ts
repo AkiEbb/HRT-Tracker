@@ -113,8 +113,26 @@ export interface LabPayload {
   clientUpdatedAt: number
 }
 
-/** 合并/同步层看到的信封。服务端可见的字段集合就是这些（§4.3）。 */
-export interface Envelope {
+/**
+ * 一条给药记录：时刻 + 明文载荷 + 本地 id。
+ *
+ * 这是导入器、加密信封、Worker 协议（§9.4）与 PK 引擎之间**唯一的**给药形状：
+ * 四处用同一个名字，就不存在「这里叫 event、那里叫 row」的转换层。
+ */
+export interface Dose {
+  id: string
+  takenAt: number
+  payload: DosePayload
+}
+
+/** 一条化验记录，形状与 `Dose` 对称。 */
+export interface Lab {
+  id: string
+  takenAt: number
+  payload: LabPayload
+}
+
+/** 合并/同步层看到的信封。服务端可见的字段集合就是这些（§4.3）。 */ export interface Envelope {
   id: string
   userId: string
   kind: RecordKind

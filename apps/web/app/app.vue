@@ -1,30 +1,19 @@
 <script setup lang="ts">
-const { data: health } = await useFetch('/api/health')
+/**
+ * 应用外壳。页面自己负责内容，这里只提供全局 Provider 与背景。
+ *
+ * 深色是钉死的（`ui.colorMode: false`）：`class="dark"` 由服务端直出，
+ * 不经过任何“跟随系统”的判断，所以首屏不会闪一下白底。
+ */
+useHead({
+  title: 'HRT Tracker',
+  htmlAttrs: { lang: 'zh-Hans', class: 'dark' },
+  bodyAttrs: { class: 'bg-default text-default antialiased' },
+})
 </script>
 
 <template>
   <UApp>
-    <main class="grid min-h-dvh place-items-center p-6">
-      <UCard class="w-full max-w-md">
-        <template #header>
-          <h1 class="text-lg font-semibold">HRT Tracker</h1>
-        </template>
-        <dl class="space-y-1 text-sm">
-          <div class="flex justify-between gap-4">
-            <dt class="opacity-70">protocol</dt>
-            <dd class="font-mono">{{ health?.protocol ?? '—' }}</dd>
-          </div>
-          <div class="flex justify-between gap-4">
-            <dt class="opacity-70">catalog</dt>
-            <dd class="truncate font-mono">{{ health?.catalog ?? '—' }}</dd>
-          </div>
-        </dl>
-        <template #footer>
-          <p class="text-xs opacity-60">
-            v0.1 骨架。曲线来自群体模型，不能作为用药依据。
-          </p>
-        </template>
-      </UCard>
-    </main>
+    <NuxtPage />
   </UApp>
 </template>

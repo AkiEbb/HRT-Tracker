@@ -13,12 +13,13 @@ import { DoseError, makeDose } from './dose'
 import {
   type ActiveFactorOf,
   type Analyte,
+  type Dose,
   type DoseExtras,
-  type DosePayload,
   isAnalyte,
   isCompound,
   isLabUnit,
   isRoute,
+  type Lab,
   type LabMonitoring,
   type LabPayload,
   type LabUnit,
@@ -42,17 +43,10 @@ export interface ImportOptions {
   now?: () => number
 }
 
-export interface ImportedDose {
-  id: string
-  takenAt: number
-  payload: DosePayload
-}
+/** 导入产物直接就是这个形状，不另立名目。 */
+export type ImportedDose = Dose
 
-export interface ImportedLab {
-  id: string
-  takenAt: number
-  payload: LabPayload
-}
+export type ImportedLab = Lab
 
 export interface ImportReport {
   source: 'kira-hrt' | 'transmtf'
