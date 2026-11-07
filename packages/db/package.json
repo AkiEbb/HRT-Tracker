@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema.sqlite": "./src/schema.sqlite.ts",
-    "./schema.pg": "./src/schema.pg.ts"
+    "./schema.pg": "./src/schema.pg.ts",
+    "./store": "./src/store/sql.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
