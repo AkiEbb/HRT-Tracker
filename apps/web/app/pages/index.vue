@@ -57,6 +57,19 @@ const endMS = computed(() => {
 })
 const spanDays = computed(() => Math.round((endMS.value - startMS.value) / DAY))
 
+/**
+ * 采样步长随区间自动变稀，让点数封顶在 ~4000。
+ *
+ * 真实记录可能横跨一年（早期备份 + 今天的单次给药），固定 30 分钟会得到 1.7 万个点；
+ * 而且引擎把「起算点之前的给药」一次性堆到 t=0（solver 的 `applySchedulesUpTo(0)`），
+ * 所以拉长区间只会让老记录变成一个虚假的尖峰。宁可把步长放粗、把区间缩短到
+ * 「第一条记录 → 最后一条 +7 天」。
+ */
+const stepMin = computed(() => {
+  const spanMin = (endMS.value - startMS.value) / 60_000
+  return Math.max(30, Math.ceil(spanMin / 4000 / 5) * 5)
+})
+
 const weightKG = computed(() => {
   const latest = doses.value[doses.value.length - 1]
   return latest?.payload.weightKG ?? DEFAULT_WEIGHT
@@ -79,12 +92,13 @@ let generation = 0
 
 const curves = computed<Curve[]>(() => {
   const list: Curve[] = []
-  const add = (outcome: Outcome, label: string, color: string): void => {
+  const add = (outcome: Outcome, label: string, color: string, dash?: number[]): void => {
     if (outcome === null || 'error' in outcome) return
-    list.push({ label, color, tMS: outcome.series.t, conc: outcome.series.conc })
+    list.push({ label, color, dash, tMS: outcome.series.t, conc: outcome.series.conc })
   }
   add(builtin.value, 'builtin', '#60a5fa')
-  add(transmtf.value, 'transmtf', '#f472b6')
+  // transmtf 用虚线：两个模型在多数给药方案上几乎重合，同色实线会互相遮住。
+  add(transmtf.value, 'transmtf', '#f472b6', [6, 4])
   return list
 })
 
@@ -135,7 +149,7 @@ const recompute = async (): Promise<void> => {
     weightKG: weightKG.value,
     startMS: startMS.value,
     endMS: endMS.value,
-    stepMin: 30,
+    stepMin: stepMin.value,
   }
   const [a, b] = await Promise.all([
     run({ ...input, engine: 'builtin' }),
@@ -148,7 +162,7 @@ const recompute = async (): Promise<void> => {
 }
 
 onMounted(recompute)
-watch([doses, hormone, weightKG, startMS, endMS], recompute)
+watch([doses, hormone, weightKG, startMS, endMS, stepMin], recompute)
 
 const fmt = (value: number | null, digits = 1): string =>
   value === null ? '—' : value.toFixed(digits)
@@ -232,7 +246,10 @@ const fmt = (value: number | null, digits = 1): string =>
     />
 
     <footer class="mt-auto text-xs opacity-50">
-      {{ doses.length }} 条记录 · {{ weightKG }} kg · 步长 30 分钟 · 区间 {{ spanDays }} 天。
+      {{ doses.length }} 条记录 · {{ weightKG }} kg · 步长 {{ stepMin }} 分钟 · 区间 {{ spanDays }} 天。
+      <span v-if="stepMin > 30">
+        区间太长，采样已自动放粗，峰值是按采样点取的最大值，可能略偏低。
+      </span>
       曲线来自群体模型，不能作为用药依据。
     </footer>
   </main>

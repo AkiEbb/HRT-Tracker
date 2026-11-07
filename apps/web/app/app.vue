@@ -18,6 +18,7 @@ useHead({
       <span class="font-semibold">HRT Tracker</span>
       <NuxtLink to="/" class="opacity-60 transition hover:opacity-100">PK 对比</NuxtLink>
       <NuxtLink to="/records" class="opacity-60 transition hover:opacity-100">我的记录</NuxtLink>
+      <NuxtLink to="/backup" class="opacity-60 transition hover:opacity-100">导入 / 导出</NuxtLink>
     </nav>
     <NuxtPage />
   </UApp>

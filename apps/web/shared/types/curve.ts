@@ -11,4 +11,6 @@ export interface Curve {
   /** 采样时刻（epoch ms）；同一张图里所有曲线必须共用同一组。 */
   tMS: Float64Array
   conc: Float64Array
+  /** 可选虚线样式。两个模型的曲线常常几乎重合，靠虚实区分才看得出是两条。 */
+  dash?: number[]
 }

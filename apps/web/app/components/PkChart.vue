@@ -30,7 +30,9 @@ const axisLabel = computed(() => (props.unit === 'ng/dl' ? 'ng/dL' : 'pg/mL'))
 const grid = computed<Float64Array>(() => props.curves[0]?.tMS ?? new Float64Array())
 
 const signature = computed(() =>
-  props.curves.map((curve) => `${curve.label}:${curve.color}`).join('|'),
+  props.curves
+    .map((curve) => `${curve.label}:${curve.color}:${curve.dash?.join('-') ?? ''}`)
+    .join('|'),
 )
 
 const data = computed<uPlot.AlignedData>(() => {
@@ -68,11 +70,13 @@ const options = (width: number): uPlot.Options => ({
     },
   ],
   series: [
-    {},
+    // 横轴也要占一格图例（显示成 "Value: --"），它下面那行由样式隐藏。
+    { label: '小时' },
     ...props.curves.map((curve) => ({
       label: curve.label,
       stroke: curve.color,
       width: 2,
+      dash: curve.dash,
       points: { show: false },
     })),
   ],
@@ -138,3 +142,10 @@ onBeforeUnmount(destroy)
     <p v-if="curves.length === 0" class="py-16 text-center text-sm opacity-50">还没有可画的数据</p>
   </div>
 </template>
+
+<style scoped>
+/* uPlot 给横轴也建了一格图例（"Value: --"），换成 "小时" 之后仍然是噪声，直接藏掉这一行。 */
+:deep(.u-legend tr:first-child) {
+  display: none;
+}
+</style>
