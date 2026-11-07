@@ -26,6 +26,11 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx biome ci .
       - run: bun run typecheck
+      # schema 改了但忘了重新生成迁移，比“迁移写错”更隐疱：本地全绿，部署时才少一列。
+      - name: 迁移与 schema 同步
+        run: |
+          bun run db:generate
+          git diff --exit-code --stat -- packages/db/migrations
 
   unit:
     name: unit（bun test）

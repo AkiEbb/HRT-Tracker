@@ -1,0 +1,29 @@
+// Cloudflare 目标的配置。**这里没有真的 id**：D1 与 KV 的 id 由 `wrangler d1 create` /
+// `wrangler kv namespace create` 生成，属于部署者的账号，不该进版本库。
+// 占位符故意写成一眼能认出的形状，而不是空字符串——空字符串会被 wrangler 当成合法配置。
+//
+// 迁移目录直接指向 `packages/db/migrations/sqlite`：那是 drizzle-kit 生成的真迁移文件，
+// 也是上面那条约束的实现——**D1 的迁移不是手抄的第二份**。
+{
+  "name": "hrt-tracker",
+  "main": "../../apps/web/.output/server/index.mjs",
+  "assets": { "directory": "../../apps/web/.output/public" },
+  "compatibility_date": "2024-09-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hrt-tracker",
+      "database_id": "REPLACE_WITH_d1_create_OUTPUT",
+      "migrations_dir": "../../packages/db/migrations/sqlite"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "REPLACE_WITH_kv_namespace_create_OUTPUT",
+      "preview_id": "REPLACE_WITH_kv_namespace_create_preview_OUTPUT"
+    }
+  ]
+}

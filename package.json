@@ -16,6 +16,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "bun run --filter '*' typecheck",
+    "db:generate": "bun --cwd packages/db run generate",
     "changelog": "git-cliff -o CHANGELOG.md"
   },
   "devDependencies": {

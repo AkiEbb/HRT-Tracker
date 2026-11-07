@@ -64,10 +64,11 @@ HRT-Tracker/
 ├─ packages/
 │  ├─ pk-core/             # 两套 PK 引擎 + catalog（JSON 参数真源）+ 校准
 │  ├─ protocol/            # 内部 schema、导入导出、金标准夹具
-│  └─ crypto/              # DEK/KEK、Argon2id、XChaCha20-Poly1305 信封、恢复短语
+│  ├─ crypto/              # DEK/KEK、Argon2id、XChaCha20-Poly1305 信封、恢复短语
+│  └─ db/                  # Drizzle schema（sqlite + pg 两份）+ 生成的迁移 .sql
 ├─ docs/                   # DESIGN.md / ROADMAP.md
 ├─ deploy/
-│  ├─ workers/             # wrangler.jsonc、D1 迁移脚本
+│  ├─ workers/             # wrangler.jsonc（D1 迁移目录指向 packages/db）
 │  └─ vps/                 # Dockerfile、compose.yaml、systemd unit
 ├─ scripts/                # 迁移/按键校验/夹具生成
 ├─ cliff.toml  biome.json  package.json  tsconfig.base.json
@@ -266,16 +267,30 @@ v0.1 没有账号，记录存在**这台设备的浏览器**里。选型与边�
 
 ### 6.1 表（明文元数据，服务端可见）
 
-| 表                   | 关键列                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `users`              | `id`, `created_at`, `dek_wrapped_kek`, `dek_wrapped_recovery`, `kdf_salt_a`, `kdf_salt_b`, `kdf_params`       |
-| `credentials`        | `user_id`, `password_hash`(Argon2id PHC 串), `totp_secret_ct`, `totp_enabled`                                 |
-| `oidc_links`         | `user_id`, `issuer`, `subject`, `email_hint`                                                                  |
-| `passkeys`           | `user_id`, `credential_id`, `public_key`, `sign_count`, `prf_capable`                                         |
-| `sessions`           | `id`, `user_id`, `token_hash`(SHA-256), `device_label`, `created_at`, `last_seen`, `expires_at`, `revoked_at` |
-| `invite_codes`       | `code_hash`, `created_by`, `used_by`, `expires_at`                                                            |
-| `reminders`          | `user_id`, `next_fire_at`, `payload_ct`（提醒内容也加密）                                                     |
-| `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth`                                                                       |
+| 表                   | 关键列                                                                                                                                                                  | 落地阶段 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `users`              | `id`, `email`(唯一，写入前 normalize), `email_verified_at`, `status`, `created_at`, `dek_wrapped_kek`, `dek_wrapped_recovery`, `kdf_salt_a`, `kdf_salt_b`, `kdf_params` | v0.2 ✅  |
+| `credentials`        | `user_id`, `password_hash`(Argon2id PHC 串), `totp_secret_ct`, `totp_enabled`                                                                                           | v0.2 ✅  |
+| `sessions`           | `id`, `user_id`, `token_hash`(SHA-256), `device_label`, `created_at`, `last_seen`, `expires_at`, `revoked_at`                                                           | v0.2 ✅  |
+| `invite_codes`       | `code_hash`, `created_by`, `used_by`, `expires_at`, `used_at`                                                                                                           | v0.2 ✅  |
+| `records`            | `(user_id, id)` 复合主键, `kind`, `taken_at`, `rev`, `iv`, `ct`, `device_id`, `updated_at`（= §4.3 信封）                                                               | v0.2 ✅  |
+| `storage_kv`         | `key`, `value`, `expires_at`（VPS 上兵位 KV 的替身，§13）                                                                                                               | v0.2 ✅  |
+| `oidc_links`         | `user_id`, `issuer`, `subject`, `email_hint`                                                                                                                            | v0.3+    |
+| `passkeys`           | `user_id`, `credential_id`, `public_key`, `sign_count`, `prf_capable`                                                                                                   | v0.3+    |
+| `reminders`          | `user_id`, `next_fire_at`, `payload_ct`（提醒内容也加密）                                                                                                               | v0.4     |
+| `push_subscriptions` | `user_id`, `endpoint`, `p256dh`, `auth`                                                                                                                                 | v0.4     |
+
+几条不属于表的约束：
+
+- **`users.email` 必须归一化后再存**（`normalizeEmail`：trim + 小写）。不改的话，`Aki@x.com`
+  能注册成一个新账号，而密码重置邮件会发到那个地址——技术上 RFC 允许 local part 区分大小写，
+  但泄露的是真实用户的数据。
+- **`status = 'incomplete'`** 是 §6.3 第 4 步之前的合法状态：能完成注册或注销，不能写任何记录。
+  “`dek_wrapped_*` 为空”这个判断散在每个接口里就会有人忘掉一处，写成一列可查。
+- **`records` 的 `updated_at` 用服务端时钟**，客户端时间只活在密文里；否则一个时钟偏到 2030 年的设备
+  就能把它自己排在游标末尾永远同步不到。
+- **不建 `text_pattern_ops` 之类的花式索引**：游标只有一种形状 `(user_id, updated_at, id)`，
+  一个索引对它负责到底（`EXPLAIN QUERY PLAN` 有测试盯着）。
 
 ### 6.2 会话
 
@@ -563,6 +578,10 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 | 密钥         | `wrangler secret put`                                                    | `.env`（`0600`）或 systemd `EnvironmentFile`  |
 | 迁移         | `drizzle-kit generate --dialect sqlite` → `wrangler d1 migrations apply` | 同一份 sqlite 迁移；pg 单独一套               |
 
+**迁移的来源只有一个**：`packages/db/migrations/sqlite`。D1 的 `migrations_dir` 直接指向它，
+VPS 的 SQLite 也用它（`drizzle-kit migrate`）。两份手抄的 DDL 必然漂，而 DDL 漂到了生产才发现。
+PG 单独一套（`migrations/pg`），逻辑形状由 `test/schema-parity.test.ts` 强制与 sqlite 一致。
+
 **设计约束（因 D1 反推）**：
 
 1. 所有多写操作必须是**幂等单批**，禁止依赖"读-改-写"事务。
@@ -570,6 +589,9 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 3. 不使用 PG 独有类型（`jsonb` 索引用不上）；JSON 一律 `text`。
 
 **方言差异清单**（必须在 CI 双跑验证）：`LIMIT/OFFSET` 语义、`ON CONFLICT` 写法、`RETURNING` 支持、大小写与 `COLLATE`、布尔存储。
+
+CI 里不靠 service 容器验 PG：`unit` job 用 **PGlite**（真 PostgreSQL 编译成 wasm）把同一批 `.sql` 灌进去，
+和 `bun:sqlite` 平行地写同一份信封数据再读回来比对。加一个 `postgres` service 会让本地和 CI 跑的东西不一样。
 
 两条目标的构建、启动、上线命令与坑写在 `deploy/README.md`（含 `deploy/systemd/hrt-tracker.service` 样例与
 `deploy/smoke.sh` 蹦烟脚本）。设计文档不再重复一份可能过期的命令。
