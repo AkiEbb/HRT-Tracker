@@ -1,0 +1,41 @@
+[Unit]
+Description=HRT Tracker (Nitro node-server)
+Documentation=https://github.com/AkiEbb/HRT-Tracker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 换成实际的部署路径与运行用户；不要用 root。
+User=hrt
+Group=hrt
+WorkingDirectory=/srv/hrt-tracker/apps/web
+EnvironmentFile=/etc/hrt-tracker/env
+Environment=NODE_ENV=production
+Environment=PORT=3210
+ExecStart=/usr/bin/node .output/server/index.mjs
+Restart=on-failure
+RestartSec=3
+
+# 端口只给本机反代，不直接对外。
+# 反代（caddy/nginx）转发到 127.0.0.1:3210，TLS 在反代上终止。
+
+# 收紧权限：进程只需要读自己的产物和自己那点数据。
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+# ↑ V8 要 JIT，必须显式关掉这个加固选项（默认就不是 true，写出来是防止有人“顺手开启”）。
+StateDirectory=hrt-tracker
+ReadWritePaths=/var/lib/hrt-tracker
+
+[Install]
+WantedBy=multi-user.target

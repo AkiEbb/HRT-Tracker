@@ -554,21 +554,30 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 
 **方言差异清单**（必须在 CI 双跑验证）：`LIMIT/OFFSET` 语义、`ON CONFLICT` 写法、`RETURNING` 支持、大小写与 `COLLATE`、布尔存储。
 
+两条目标的构建、启动、上线命令与坑写在 `deploy/README.md`（含 `deploy/systemd/hrt-tracker.service` 样例与
+`deploy/smoke.sh` 蹦烟脚本）。设计文档不再重复一份可能过期的命令。
+
 ---
 
 ## 14. 测试与 CI
 
 ### 14.1 矩阵
 
-| job          | 内容                                                                                         | 目标    |
-| ------------ | -------------------------------------------------------------------------------------------- | ------- |
-| `lint`       | Biome + `tsc --noEmit` + i18n 键对称                                                         | 全部    |
-| `unit`       | `bun test`：crypto / pk-core（**对 Kira 夹具容差 1e-6**）/ protocol 金标准                   | 全部    |
-| `node`       | 构建 `node-server` + SQLite 集成 + Playwright E2E                                            | VPS     |
-| `cf-local`   | `wrangler dev .output/server/index.mjs --assets .output/public`（miniflare D1/KV）+ API 集成 | Workers |
-| `cf-preview` | 部署临时 preview + 5 条 smoke（登录/写一条/读回/导出/删除）                                  | Workers |
+| job          | 内容                                                             | 目标    | 状态                                         |
+| ------------ | ---------------------------------------------------------------- | ------- | -------------------------------------------- |
+| `lint`       | `biome ci` + `bun run typecheck`（三个包各一次）                 | 全部    | ✅ v0.1（i18n 键对称等 v0.2 接入 i18n 后加） |
+| `unit`       | `bun test`                                                       | 全部    | ✅ v0.1                                      |
+| `node`       | `build:node` + 起服务 + `deploy/smoke.sh 3210`                   | VPS     | ✅ v0.1（Playwright E2E 待 v0.2 有账号后）   |
+| `cf-local`   | `build:cf` + `wrangler dev`（miniflare）+ `deploy/smoke.sh 3212` | Workers | ✅ v0.1                                      |
+| `cf-preview` | 部署临时 preview + 5 条 smoke（登录/写一条/读回/导出/删除）      | Workers | v0.2（要账号与 secrets）                     |
 
-**miniflare ≠ 真 D1**：参数上限（100）与 batch 语义不完全等价，所以 `cf-preview` 不可省。
+两条目标的蹦烟是**同一个脚本**（`deploy/smoke.sh`），断言的也是同一份东西：health JSON + 三个页面 200。
+分开写两套 grep 就会出现“本地绿、CI 绿、线上红”这种最难查的差异。
+
+`node` 与 `cf-local` 必须是**两个独立 job**：它们往同一个 `.output/` 里写，跑在同一台 runner 上会互相覆盖。
+
+**miniflare ≠ 真 D1**：参数上限（100）与 batch 语义不完全等价，所以 `cf-preview` 不可省——它只是推到 v0.2，
+因为现在还没有账号、没有 D1 表，也没有东西可以 smoke。
 
 ### 14.2 硬门槛
 

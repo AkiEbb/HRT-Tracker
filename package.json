@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "packageManager": "bun@1.4.2",
+  "packageManager": "bun@1.4.4",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "bun --filter @hrt/web dev",
@@ -16,7 +16,6 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "bun run --filter '*' typecheck",
-    "check:i18n": "bun scripts/check-i18n.mjs",
     "changelog": "git-cliff -o CHANGELOG.md"
   },
   "devDependencies": {

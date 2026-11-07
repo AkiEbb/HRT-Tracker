@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.4.4
+  NODE_VERSION: 22
+
+jobs:
+  lint:
+    name: lint（Biome + tsc）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bunx biome ci .
+      - run: bun run typecheck
+
+  unit:
+    name: unit（bun test）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun test
+
+  node:
+    name: node（VPS 目标）
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build:node
+      - name: 起服务并冒烟
+        working-directory: apps/web
+        run: |
+          PORT=3210 node .output/server/index.mjs &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ../../deploy/smoke.sh 3210
+
+  cf-local:
+    name: cf-local（Workers 目标）
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build:cf
+      # 与 node 不同：两个 preset 写的是同一个 .output/，所以每个 job 各建各的。
+      # wrangler 4 必须有显式入口和 assets，光写 `wrangler dev --local` 会报
+      # "Missing entry-point to Worker script or to assets directory"。
+      - name: 起 workerd 并冒烟
+        working-directory: apps/web
+        run: |
+          npx wrangler dev .output/server/index.mjs --assets .output/public --port 3212 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ../../deploy/smoke.sh 3212
