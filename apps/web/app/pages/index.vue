@@ -1,25 +1,75 @@
 <script setup lang="ts">
+import { categoryToHormone } from '@hrt/pk-core'
+import type { Dose } from '@hrt/protocol'
 import { REGIMENS } from '#shared/pk/regimens'
 import type { Curve } from '#shared/types/curve'
 
 /**
- * v0.1 的计算页：选一个示例方案，两个引擎各算一次，画在同一张图上。
+ * v0.1 的计算页：同一批记录，两个引擎各算一次，画在同一张图上。
  *
+ * 数据来源有两种：内置示例方案（可以立刻看到引擎差异）与本地真实记录。
  * 主线程只接收数组并交给 uPlot；所有求解在 Worker 里完成（§9.4）。
  */
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
-const weightKG = 62
+const DEFAULT_WEIGHT = 62
 const days = ref(14)
 const regimenId = ref('gel')
+const source = ref<'demo' | 'mine'>('demo')
 const { run } = usePkWorker()
+const { store } = useRecordStore()
 
-const regimen = computed(() => REGIMENS.find((item) => item.id === regimenId.value) ?? REGIMENS[0])
+const myDoses = shallowRef<Dose[]>([])
 
-/** 起点取整到当天 0 点，避免每次刷新横轴都不同。 */
-const startMS = ref(Math.floor(Date.now() / DAY) * DAY)
-const endMS = computed(() => startMS.value + days.value * DAY)
-const doses = computed(() => regimen.value?.build(startMS.value, weightKG) ?? [])
+const loadMine = async (): Promise<void> => {
+  if (store.value === null) return
+  try {
+    myDoses.value = await store.value.list('dose')
+  } catch {
+    myDoses.value = []
+  }
+}
+
+onMounted(loadMine)
+watch(store, loadMine)
+
+/** 示例方案的起点取整到当天 0 点，避免每次刷新横轴都不同。 */
+const demoStartMS = ref(Math.floor(Date.now() / DAY) * DAY)
+
+const usingMine = computed(() => source.value === 'mine' && myDoses.value.length > 0)
+
+const doses = computed<Dose[]>(() => {
+  if (usingMine.value) return myDoses.value
+  const regimen = REGIMENS.find((item) => item.id === regimenId.value) ?? REGIMENS[0]
+  return regimen?.build(demoStartMS.value, DEFAULT_WEIGHT) ?? []
+})
+
+/** 真实记录：区间从第一条到最后一条之后 7 天，至少 7 天能看到给药节奏。 */
+const startMS = computed(() => {
+  const first = doses.value[0]
+  return usingMine.value && first !== undefined ? first.takenAt : demoStartMS.value
+})
+const endMS = computed(() => {
+  if (!usingMine.value) return startMS.value + days.value * DAY
+  const last = doses.value[doses.value.length - 1]
+  const tail = (last?.takenAt ?? startMS.value) + 7 * DAY
+  return Math.max(tail, startMS.value + 7 * DAY)
+})
+const spanDays = computed(() => Math.round((endMS.value - startMS.value) / DAY))
+
+const weightKG = computed(() => {
+  const latest = doses.value[doses.value.length - 1]
+  return latest?.payload.weightKG ?? DEFAULT_WEIGHT
+})
+
+/** transmtf 只覆盖雌二醇：睾酮记录会让它如实报错，这里不替它假装能算。 */
+const hormone = computed<'estradiol' | 'testosterone'>(() => {
+  for (const dose of doses.value) {
+    const key = categoryToHormone(dose.payload.category)
+    if (key !== undefined) return key
+  }
+  return 'estradiol'
+})
 
 type Outcome = Awaited<ReturnType<typeof run>>
 const builtin = shallowRef<Outcome>(null)
@@ -69,6 +119,11 @@ const warnings = computed(() => {
   return [...new Set(collected)]
 })
 
+const note = computed(() => {
+  if (usingMine.value) return `用本地记录算的：${doses.value.length} 条。`
+  return REGIMENS.find((item) => item.id === regimenId.value)?.note ?? ''
+})
+
 const recompute = async (): Promise<void> => {
   busy.value = true
   // 选择变化很快时，旧请求可能晚回：只有最后一次选择有资格写状态。
@@ -76,8 +131,8 @@ const recompute = async (): Promise<void> => {
   const mine = generation
   const input = {
     doses: doses.value,
-    hormone: 'estradiol' as const,
-    weightKG,
+    hormone: hormone.value,
+    weightKG: weightKG.value,
     startMS: startMS.value,
     endMS: endMS.value,
     stepMin: 30,
@@ -93,7 +148,7 @@ const recompute = async (): Promise<void> => {
 }
 
 onMounted(recompute)
-watch([regimenId, days], recompute)
+watch([doses, hormone, weightKG, startMS, endMS], recompute)
 
 const fmt = (value: number | null, digits = 1): string =>
   value === null ? '—' : value.toFixed(digits)
@@ -103,23 +158,44 @@ const fmt = (value: number | null, digits = 1): string =>
   <main class="mx-auto flex min-h-dvh max-w-5xl flex-col gap-5 p-4 sm:p-6">
     <header class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 class="text-xl font-semibold">HRT Tracker · PK 对比</h1>
-        <p class="mt-1 text-sm opacity-60">同一个方案，两个模型各算一遍。示例数据，不是用药建议。</p>
+        <h1 class="text-xl font-semibold">PK 对比</h1>
+        <p class="mt-1 text-sm opacity-60">
+          同一批记录，两个模型各算一遍。曲线来自群体模型，不是用药建议。
+        </p>
       </div>
-      <div class="flex items-center gap-2 text-sm">
+      <div class="flex flex-wrap items-center gap-2 text-sm">
         <USelect
+          v-model="source"
+          :items="[
+            { label: '示例方案', value: 'demo' },
+            { label: `我的记录（${myDoses.length}）`, value: 'mine' },
+          ]"
+          class="w-40"
+        />
+        <USelect
+          v-if="!usingMine"
           v-model="regimenId"
           :items="REGIMENS.map((item) => ({ label: item.label, value: item.id }))"
           class="w-56"
         />
-        <UInput v-model.number="days" type="number" min="3" max="60" class="w-20" />
-        <span class="opacity-60">天</span>
+        <template v-if="!usingMine">
+          <UInput v-model.number="days" type="number" min="3" max="60" class="w-20" />
+          <span class="opacity-60">天</span>
+        </template>
       </div>
     </header>
 
+    <UAlert
+      v-if="source === 'mine' && myDoses.length === 0"
+      color="neutral"
+      variant="subtle"
+      title="还没有记录"
+      description="先去「我的记录」加一条，再回来看曲线。"
+    />
+
     <PkChart :curves="curves" :unit="unit" :height="360" />
 
-    <p v-if="regimen" class="text-sm opacity-70">{{ regimen.note }}</p>
+    <p v-if="note" class="text-sm opacity-70">{{ note }}</p>
 
     <div class="grid gap-3 sm:grid-cols-2">
       <UCard v-for="row in rows" :key="row.key">
@@ -156,7 +232,7 @@ const fmt = (value: number | null, digits = 1): string =>
     />
 
     <footer class="mt-auto text-xs opacity-50">
-      {{ doses.length }} 条示例记录 · {{ weightKG }} kg · 步长 30 分钟 · 区间 {{ days }} 天。
+      {{ doses.length }} 条记录 · {{ weightKG }} kg · 步长 30 分钟 · 区间 {{ spanDays }} 天。
       曲线来自群体模型，不能作为用药依据。
     </footer>
   </main>

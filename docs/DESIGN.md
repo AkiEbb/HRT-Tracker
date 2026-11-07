@@ -76,9 +76,15 @@ HRT-Tracker/
 **约定**：`packages/*` 不做构建步骤，`exports` 直指 `src/index.ts`，由 Nitro/Vite 打包。
 
 > ✅ **已验证（v0.1 第一周）**：两处同时声明后，`node-server` 与 `cloudflare_module` 双目标均构建成功，
-> 且分别在 node 与 workerd（`wrangler dev --local`）上实测返回同一份数据。
+> 且分别在 node 与 workerd（`wrangler dev`）上实测返回同一份数据。
 > **关键：只写一处不够**——SSR 走 Vite 的解析器，Nitro 产物走 rollup 的解析器，两边都要放行：
 > `nitro.externals.inline` + `vite.ssr.noExternal`。少一边，问题会推迟到部署时才炸。
+
+> ⚠️ 两个部署目标的产物写在**同一个 `.output/`**，后一次构建会覆盖前一次。
+> 所以本地验收也必须分两轮：`build:node` → `PORT=3210 node .output/server/index.mjs`；
+> `build:cf` → `npx wrangler dev .output/server/index.mjs --assets .output/public --port 3211`。
+> wrangler 4 起必须显式给入口（不再从 `nuxt preview` 或默认配置里猜），漏了会报
+> `Missing entry-point to Worker script or to assets directory`。
 
 ---
 
@@ -178,6 +184,23 @@ interface Envelope {
 - 内部一律 **epoch ms（UTC）**；`tzOffsetMin` 只用于显示与提醒。
 - `timeH`（自 epoch 起的小时数）**只存在于导入导出边界**，是协议方言，不是内部表示。
 - 提醒按用户 IANA 时区展开成下一次触发时刻，存 `next_fire_at`（epoch ms）供扫描。
+
+### 4.6 本地存储（v0.1）
+
+v0.1 没有账号，记录存在**这台设备的浏览器**里。选型与边界：
+
+| 项   | 决定                                                                                    |
+| ---- | --------------------------------------------------------------------------------------- |
+| 引擎 | IndexedDB（`hrt-tracker` 库，`dose` / `lab` 两个 store，`takenAt` 建索引）              |
+| 访问 | 只经由 `RecordStore` 接口（`list` / `put` / `delete` / `clear`），页面不碰 `IDBRequest` |
+| 内容 | **明文** `Dose` / `Lab`。v0.2 上手后换成 `Envelope{iv, ct}`，接口不变、页面不改         |
+| 不用 | OPFS + SQLite WASM：首屏多 1–2 MB、要 COOP/COEP 头换 SharedArrayBuffer，v0.1 不值得     |
+
+为什么先明文：现在既没账号也没密钥，先套信封只会造一把没锁的钥匙；但接口必须现在立住，
+否则 v0.2 要改的是每个页面的读取路径，而不是一个实现。
+
+`useRecordStore()` 返回 `{ store: ShallowRef<RecordStore | null>, error }`：SSR 阶段 `store` 是 `null`，
+页面据此显示空态（而不是在服务端伪造一个空库，让首屏与服务端数据不一致）。
 
 ---
 
@@ -509,13 +532,13 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 
 ### 14.1 矩阵
 
-| job          | 内容                                                                       | 目标    |
-| ------------ | -------------------------------------------------------------------------- | ------- |
-| `lint`       | Biome + `tsc --noEmit` + i18n 键对称                                       | 全部    |
-| `unit`       | `bun test`：crypto / pk-core（**对 Kira 夹具容差 1e-6**）/ protocol 金标准 | 全部    |
-| `node`       | 构建 `node-server` + SQLite 集成 + Playwright E2E                          | VPS     |
-| `cf-local`   | `wrangler dev --local`（miniflare D1/KV）+ API 集成                        | Workers |
-| `cf-preview` | 部署临时 preview + 5 条 smoke（登录/写一条/读回/导出/删除）                | Workers |
+| job          | 内容                                                                                         | 目标    |
+| ------------ | -------------------------------------------------------------------------------------------- | ------- |
+| `lint`       | Biome + `tsc --noEmit` + i18n 键对称                                                         | 全部    |
+| `unit`       | `bun test`：crypto / pk-core（**对 Kira 夹具容差 1e-6**）/ protocol 金标准                   | 全部    |
+| `node`       | 构建 `node-server` + SQLite 集成 + Playwright E2E                                            | VPS     |
+| `cf-local`   | `wrangler dev .output/server/index.mjs --assets .output/public`（miniflare D1/KV）+ API 集成 | Workers |
+| `cf-preview` | 部署临时 preview + 5 条 smoke（登录/写一条/读回/导出/删除）                                  | Workers |
 
 **miniflare ≠ 真 D1**：参数上限（100）与 batch 语义不完全等价，所以 `cf-preview` 不可省。
 

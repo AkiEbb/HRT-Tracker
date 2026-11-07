@@ -14,6 +14,11 @@ useHead({
 
 <template>
   <UApp>
+    <nav class="mx-auto flex max-w-5xl items-center gap-4 px-4 pt-4 text-sm sm:px-6">
+      <span class="font-semibold">HRT Tracker</span>
+      <NuxtLink to="/" class="opacity-60 transition hover:opacity-100">PK 对比</NuxtLink>
+      <NuxtLink to="/records" class="opacity-60 transition hover:opacity-100">我的记录</NuxtLink>
+    </nav>
     <NuxtPage />
   </UApp>
 </template>

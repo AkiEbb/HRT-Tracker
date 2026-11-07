@@ -36,31 +36,25 @@
         "noUnusedVariables": "error",
         "useExhaustiveDependencies": "warn"
       },
-      "suspicious": {
-        "noExplicitAny": "warn",
-        "noConsole": "off"
-      },
+      "suspicious": { "noExplicitAny": "warn", "noConsole": "off" },
       "style": {
         "useConst": "error",
-        "noNonNullAssertion": "warn"
+        "noNonNullAssertion": "warn",
+        "useVueMultiWordComponentNames": "error"
       }
     }
   },
-  "assist": {
-    "enabled": true,
-    "actions": { "source": { "organizeImports": "on" } }
-  },
+  "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } },
   "overrides": [
     {
       "includes": ["**/*.vue"],
       "linter": {
-        "rules": {
-          "correctness": {
-            "noUnusedVariables": "off",
-            "noUnusedImports": "off"
-          }
-        }
+        "rules": { "correctness": { "noUnusedVariables": "off", "noUnusedImports": "off" } }
       }
+    },
+    {
+      "includes": ["apps/web/app/pages/**"],
+      "linter": { "rules": { "style": { "useVueMultiWordComponentNames": "off" } } }
     }
   ]
 }
