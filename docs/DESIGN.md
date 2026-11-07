@@ -32,20 +32,20 @@
 
 ## 2. 技术栈
 
-| 层       | 选择                                                  | 备注                                                                                                               |
-| -------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 框架     | Nuxt 4（Nitro v2）                                    | Workers 用 `cloudflare_module` preset，compatibility date ≥ `2024-09-19`                                           |
-| 样式     | Tailwind CSS v4（`@tailwindcss/vite`）                | 无 `postcss.config`，v4 走 Vite 插件                                                                               |
-| 组件     | `@nuxt/ui` **v4**                                     | 建在 reka-ui + Tailwind v4 上，主题走 `app.config.ts` tokens；`tailwindcss` 必须显式装在本包（不能靠传递依赖解析） |
-| 图表     | **uPlot**（≈45KB min）                                | 高密度时间序列 + 双模型叠加对比                                                                                    |
-| PK 计算  | **Web Worker**                                        | 主线程只发消息，避免低端安卓卡输入                                                                                 |
-| 数据层   | **Drizzle ORM + drizzle-kit**                         | 三方言：`d1` / `better-sqlite3` / `node-postgres`                                                                  |
-| 口令哈希 | **Argon2id via `hash-wasm`**                          | Workers 无原生 Argon2；WASM 在两端都能跑                                                                           |
-| 加密     | WebCrypto（AES-256-GCM、HKDF）                        | 只用标准 API，不引第三方密码库                                                                                     |
-| i18n     | `@nuxtjs/i18n`                                        | v0.1 只 `zh-Hans` + `en`                                                                                           |
-| 工具链   | **bun 1.4** + **Biome**                               | 与 `AkiEbb/blog` 一致                                                                                              |
-| 测试     | `bun test`（单元）+ Vitest（组件）+ Playwright（E2E） | 金标准夹具见 §8.4                                                                                                  |
-| 发布     | `git-cliff`（Conventional Commits）                   | `cliff.toml` 已就位                                                                                                |
+| 层       | 选择                                                                  | 备注                                                                                                               |
+| -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 框架     | Nuxt 4（Nitro v2）                                                    | Workers 用 `cloudflare_module` preset，compatibility date ≥ `2024-09-19`                                           |
+| 样式     | Tailwind CSS v4（`@tailwindcss/vite`）                                | 无 `postcss.config`，v4 走 Vite 插件                                                                               |
+| 组件     | `@nuxt/ui` **v4**                                                     | 建在 reka-ui + Tailwind v4 上，主题走 `app.config.ts` tokens；`tailwindcss` 必须显式装在本包（不能靠传递依赖解析） |
+| 图表     | **uPlot**（≈45KB min）                                                | 高密度时间序列 + 双模型叠加对比                                                                                    |
+| PK 计算  | **Web Worker**                                                        | 主线程只发消息，避免低端安卓卡输入                                                                                 |
+| 数据层   | **Drizzle ORM + drizzle-kit**                                         | 三方言：`d1` / `better-sqlite3` / `node-postgres`                                                                  |
+| 口令哈希 | **Argon2id via `hash-wasm`**                                          | Workers 无原生 Argon2；WASM 在两端都能跑                                                                           |
+| 加密     | **XChaCha20-Poly1305**（`@noble/ciphers`）+ 恢复短语用 `@scure/bip39` | 24 字节随机 nonce 才敢纯随机（AES-GCM 的 96-bit nonce 一旦复用就是灾难）；纯 JS 无 wasm 加载                       |
+| i18n     | `@nuxtjs/i18n`                                                        | v0.1 只 `zh-Hans` + `en`                                                                                           |
+| 工具链   | **bun 1.4** + **Biome**                                               | 与 `AkiEbb/blog` 一致                                                                                              |
+| 测试     | `bun test`（单元）+ Vitest（组件）+ Playwright（E2E）                 | 金标准夹具见 §8.4                                                                                                  |
+| 发布     | `git-cliff`（Conventional Commits）                                   | `cliff.toml` 已就位                                                                                                |
 
 **实际锁定**（2026-11-06 `bun install`）：nuxt 4.6.4 · Nitro 2.13.6 · Vite 8.3.6 · Vue 3.5.45 · vue-router 5.4.0 · `@nuxt/ui` 4.12.0 · tailwindcss 4.3.5 · bun 1.4.2。
 版本以 `bun.lock` 为准；本节只记录「当时为什么选它」，不重复记版本号。
@@ -64,7 +64,7 @@ HRT-Tracker/
 ├─ packages/
 │  ├─ pk-core/             # 两套 PK 引擎 + catalog（JSON 参数真源）+ 校准
 │  ├─ protocol/            # 内部 schema、导入导出、金标准夹具
-│  └─ crypto/              # DEK/KEK、Argon2id、AES-GCM 信封、恢复短语
+│  └─ crypto/              # DEK/KEK、Argon2id、XChaCha20-Poly1305 信封、恢复短语
 ├─ docs/                   # DESIGN.md / ROADMAP.md
 ├─ deploy/
 │  ├─ workers/             # wrangler.jsonc、D1 迁移脚本
@@ -134,7 +134,7 @@ interface Envelope {
   rev: number // 单调递增，CAS 依据
   deviceId: string
   updatedAt: number // 服务端时钟，仅用于游标分页，**不用于裁决**
-  iv: string // base64，AES-GCM 96-bit
+  iv: string // base64，XChaCha20-Poly1305 192-bit nonce
   ct: string // base64，ciphertext || tag
 }
 ```
@@ -207,16 +207,33 @@ v0.1 没有账号，记录存在**这台设备的浏览器**里。选型与边�
 ## 5. 密钥层级
 
 ```
-                 安全密码 ──Argon2id(m=64MiB,t=3,p=1)──► KEK ──AES-256-GCM──┐
-                                                                            ├──► DEK(32B, 随机)
-                 恢复短语(24 词) ──Argon2id(同参)──► KEK2 ──AES-256-GCM──────┘        │
-                                                                                     │
-   每条记录明文 ──AES-256-GCM(DEK, AAD = id|kind|rev)──► ct ──────────────────────────┘
+                 安全密码 ──Argon2id(m=64MiB,t=3,p=1)──► KEK ──XChaCha20-Poly1305──┐
+                                                                               ├──► DEK(32B, 随机)
+                 恢复短语(24 词) ──Argon2id(同参)──► KEK2 ──XChaCha20-Poly1305────┘        │
+                                                                                        │
+   每条记录明文 ──XChaCha20-Poly1305(DEK, AAD = id|kind|rev)──► ct ──────────────────────┘
 
    分享密码 ──Argon2id──► shareKey ──包裹(临时快照密钥)──► KV 中的密文快照
 ```
 
-**D1 中 `users` 表存什么**：`dek_wrapped_kek`、`dek_wrapped_recovery`（两段 base64 的包裹对象：`iv|ct|tag`）、两个 salt、Argon2 参数。**没有 DEK 明文，没有可由服务端推导的材料。**
+**D1 中 `users` 表存什么**：`dek_wrapped_kek`、`dek_wrapped_recovery`（两段 base64 的包裹对象：`iv|ct`，**tag 在 ct 末尾，不单独一段**）、两个 salt、Argon2 参数。**没有 DEK 明文，没有可由服务端推导的材料。**
+
+参数与编码的具体值（`packages/crypto` 已实现，有测试对参考实现逐字节对照）：
+
+| 项         | 值                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------ |
+| KDF        | Argon2id，`memorySizeKiB = 65536`（= 64 MiB）、`iterations = 3`、`parallelism = 1`、输出 32 字节 |
+| salt       | 16 字节随机，`kdf_salt_a`（口令）与 `kdf_salt_b`（恢复短语）**各自独立**                         |
+| AEAD       | XChaCha20-Poly1305，nonce **24 字节纯随机**（不需要计数器，也就不存在回绕复用）                  |
+| 存储编码   | `base64(iv) + "                                                                                  | " + base64(ct‖tag)` |
+| 恢复短语   | BIP39 英文 24 词（256 bit 熵 + 8 bit 校验和），只包裹/解包 DEK                                   |
+| 口令归一化 | NFKC（全角/组合字符算同一个口令），**不 trim**（首尾空格是密码的一部分）                         |
+
+**AAD 的编码不是“把三个字段用 `|` 拼起来”那么简单**：id 是客户端生成、将来还来自导入文件的自由字符串，
+裸拼接下 `id="ab",kind="dose"` 与 `id="a",kind="b|dose"` 会撞。实现用长度前缀：
+`hrt:record:v1|<id 字节长>:<id>|<kind>|<rev>`，并且直接拒绝含 `|` 的 `kind`。
+包裹用的两段也用域分隔 AAD（`hrt:dek:v1|wrapped-by:kek` 与 `…:recovery`），否则“恢复短语包的那段密文”
+可以被搬到 `dek_wrapped_kek` 列下，把“用短语解”降级成“用密码解”。
 
 ### 5.1 不变量
 
@@ -574,6 +591,11 @@ P1 的空缺是**已知缺口**，不是遗漏：没有真实样本就无法测�
 两条目标的蹦烟是**同一个脚本**（`deploy/smoke.sh`），断言的也是同一份东西：health JSON + 三个页面 200。
 分开写两套 grep 就会出现“本地绿、CI 绿、线上红”这种最难查的差异。
 
+**密码学断言必须对上游参考实现逐字节对照**，禁止自己跟自己比：
+Argon2id → libargon2 的 `argon2id_hash_raw`；XChaCha20-Poly1305 → libsodium 的
+`crypto_aead_xchacha20poly1305_ietf_encrypt`；恢复短语 → BIP39 官方测试向量（24 词那八组）。
+向量值与出处写在各测试文件顶部，夹具在 `packages/crypto/test/fixtures/`。
+
 `node` 与 `cf-local` 必须是**两个独立 job**：它们往同一个 `.output/` 里写，跑在同一台 runner 上会互相覆盖。
 
 **miniflare ≠ 真 D1**：参数上限（100）与 batch 语义不完全等价，所以 `cf-preview` 不可省——它只是推到 v0.2，
@@ -615,43 +637,47 @@ Conventional Commits（`feat:` / `fix:` / `docs:` / `chore:` …），`git-cliff
 
 ## 17. 决定记录（ADR 摘要）
 
-| #   | 决定                                                       | 备选被否的理由                                                                                 |
-| --- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1   | 新仓库 `AkiEbb/HRT-Tracker`，Kira 只做维护                 | 就地重写会撕裂现有发布链；monorepo 改造成本吃掉 MVP                                            |
-| 2   | 从上游重写（Transmtf MIT + HRT-Recorder 规格），MIT 许可   | 移植 GPL 会绑定许可；重写换来许可自由                                                          |
-| 3   | 完整平替，但分四阶段垂直切片                               | 一次性铺开等于第二个两年                                                                       |
-| 4   | Drizzle + drizzle-kit 三方言                               | 手写方言层维护成本高；Drizzle 换来同一 schema                                                  |
-| 5   | MIT                                                        | AGPL 在此场景杠杆价值低于社区门槛成本                                                          |
-| 6   | 双部署双绿是每阶段硬门槛                                   | 最后再适配 = 存储层推倒重来                                                                    |
-| 7   | 真 E2EE（服务端零密钥副本）                                | Kira 式"KMS 包裹副本"会让隐私承诺落空                                                          |
-| 8   | 口令 KEK + 恢复短语，OIDC/Passkey 只做认证                 | 服务端 escrow 违背第 1 条铁律                                                                  |
-| 9   | 记录级信封 + 记录级 LWW                                    | 整份快照在 D1 上是灾难；CRDT 对记录型数据无收益                                                |
-| 10  | 导入三档优先级（P0 可自建夹具）                            | 无法为没有样本的格式写测试                                                                     |
-| 11  | catalog 驱动 + 全局引擎 + 双曲线对比                       | 每记录选引擎会让校准与缓存乘二                                                                 |
-| 12  | session 存 D1                                              | KV 最终一致使"立即登出"失真                                                                    |
-| 13  | VPS 默认 SQLite                                            | pg 的运维面是纯负担                                                                            |
-| 14  | `@nuxt/ui` v4                                              | shadcn-vue 与它同源，二选一即可；v4 已原生适配 Tailwind v4                                     |
-| 15  | 内部 schema 自有 + 边界适配                                | 直接吃协议会让 `doseMG` 双重语义变成永久隐患                                                   |
-| 16  | 只做 PWA                                                   | 壳会带来两套通知/密钥存储/导入                                                                 |
-| 17  | 客户端合并 + 服务端 CAS                                    | 服务端 LWW 在 E2EE 下是自欺                                                                    |
-| 18  | 提醒两级推进                                               | 无 Cron 的免费方案撑不住每日漏服提醒                                                           |
-| 19  | **砍掉 OCR**                                               | 与 E2EE 无关的纯成本项，手工录入够用                                                           |
-| 20  | 代码库中性名，品牌配置化                                   | 提前定品牌消耗一轮决策；去品牌化对受众有真实价值                                               |
-| 21  | 校准先只做 MAP                                             | 估计器数量不决定信任，表达质量才决定                                                           |
-| 22  | 分享默认安全侧                                             | 无密码链接必须显式开启且 24h 过期                                                              |
-| 23  | i18n 先中英                                                | 质量差的多语言是医疗文案风险                                                                   |
-| 24  | CI 三段式（unit / node / cf-preview）                      | miniflare 与真 D1 不等价                                                                       |
-| 25  | 导出双格式 + 账号删除即硬删                                | 软删与"已经删了"的承诺冲突                                                                     |
-| 26  | SSH 签名 + AkiEbb 身份                                     | 卡片 GPG 密钥绑的是 RhenCloud 身份，签不出 Verified                                            |
-| 27  | 信任边界五条铁律写进文档                                   | 只活在对白里的约束等于没有约束                                                                 |
-| 28  | 两份文档（DESIGN + ROADMAP）                               | 文档越多越没人读                                                                               |
-| 29  | 抗雄当量恒为 0                                             | 用自身毫克数冒充当量会污染曲线与导出                                                           |
-| 30  | 体重按事件存（`weightKG`），标量只做回落                   | 上游两种工具都是这个模型；全局体重会让历史曲线随修改而漂移                                     |
-| 31  | 注射用 `kClearInjection`，其余用 `kClear`（两池），EU 例外 | 上游明示规则（`ester !== EU ? kClearInjection : kClear`）；同池混用时 E2 与 T 无法同时对上实测 |
-| 32  | 引擎只读 `doseEquivMG`，`doseMG` 连参数都不传              | 少一个能出错的入口，比多一层"记得别用"的自觉可靠                                               |
-| 33  | 两个引擎共用一个数值内核，引擎只提供参数与隔室拓扑         | 线性系统的恒等关系只需验证一次；引擎差异变成可测的“相差多少倍”而不是两个黑盒                   |
-| 34  | `transmtf` 的凝胶三室级联把损失份额在剂量时刻扣掉          | 与上游并行出口方程严格等价（逐点 < 1e-6），不需要给隔室加第二个出口，也就不需要新的数值路径    |
-| 35  | v0.1 的 `transmtf` 只做 E2 五途径，抗雄/EU 留 v0.3         | 抗雄曲线在 v0.1 图表里没有位置（独立小图到 v0.3），先换不来用户可见价值                        |
+| #   | 决定                                                                | 备选被否的理由                                                                                                                                                                                                                                               |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | 新仓库 `AkiEbb/HRT-Tracker`，Kira 只做维护                          | 就地重写会撕裂现有发布链；monorepo 改造成本吃掉 MVP                                                                                                                                                                                                          |
+| 2   | 从上游重写（Transmtf MIT + HRT-Recorder 规格），MIT 许可            | 移植 GPL 会绑定许可；重写换来许可自由                                                                                                                                                                                                                        |
+| 3   | 完整平替，但分四阶段垂直切片                                        | 一次性铺开等于第二个两年                                                                                                                                                                                                                                     |
+| 4   | Drizzle + drizzle-kit 三方言                                        | 手写方言层维护成本高；Drizzle 换来同一 schema                                                                                                                                                                                                                |
+| 5   | MIT                                                                 | AGPL 在此场景杠杆价值低于社区门槛成本                                                                                                                                                                                                                        |
+| 6   | 双部署双绿是每阶段硬门槛                                            | 最后再适配 = 存储层推倒重来                                                                                                                                                                                                                                  |
+| 7   | 真 E2EE（服务端零密钥副本）                                         | Kira 式"KMS 包裹副本"会让隐私承诺落空                                                                                                                                                                                                                        |
+| 8   | 口令 KEK + 恢复短语，OIDC/Passkey 只做认证                          | 服务端 escrow 违背第 1 条铁律                                                                                                                                                                                                                                |
+| 9   | 记录级信封 + 记录级 LWW                                             | 整份快照在 D1 上是灾难；CRDT 对记录型数据无收益                                                                                                                                                                                                              |
+| 10  | 导入三档优先级（P0 可自建夹具）                                     | 无法为没有样本的格式写测试                                                                                                                                                                                                                                   |
+| 11  | catalog 驱动 + 全局引擎 + 双曲线对比                                | 每记录选引擎会让校准与缓存乘二                                                                                                                                                                                                                               |
+| 12  | session 存 D1                                                       | KV 最终一致使"立即登出"失真                                                                                                                                                                                                                                  |
+| 13  | VPS 默认 SQLite                                                     | pg 的运维面是纯负担                                                                                                                                                                                                                                          |
+| 14  | `@nuxt/ui` v4                                                       | shadcn-vue 与它同源，二选一即可；v4 已原生适配 Tailwind v4                                                                                                                                                                                                   |
+| 15  | 内部 schema 自有 + 边界适配                                         | 直接吃协议会让 `doseMG` 双重语义变成永久隐患                                                                                                                                                                                                                 |
+| 16  | 只做 PWA                                                            | 壳会带来两套通知/密钥存储/导入                                                                                                                                                                                                                               |
+| 17  | 客户端合并 + 服务端 CAS                                             | 服务端 LWW 在 E2EE 下是自欺                                                                                                                                                                                                                                  |
+| 18  | 提醒两级推进                                                        | 无 Cron 的免费方案撑不住每日漏服提醒                                                                                                                                                                                                                         |
+| 19  | **砍掉 OCR**                                                        | 与 E2EE 无关的纯成本项，手工录入够用                                                                                                                                                                                                                         |
+| 20  | 代码库中性名，品牌配置化                                            | 提前定品牌消耗一轮决策；去品牌化对受众有真实价值                                                                                                                                                                                                             |
+| 21  | 校准先只做 MAP                                                      | 估计器数量不决定信任，表达质量才决定                                                                                                                                                                                                                         |
+| 22  | 分享默认安全侧                                                      | 无密码链接必须显式开启且 24h 过期                                                                                                                                                                                                                            |
+| 23  | i18n 先中英                                                         | 质量差的多语言是医疗文案风险                                                                                                                                                                                                                                 |
+| 24  | CI 三段式（unit / node / cf-preview）                               | miniflare 与真 D1 不等价                                                                                                                                                                                                                                     |
+| 25  | 导出双格式 + 账号删除即硬删                                         | 软删与"已经删了"的承诺冲突                                                                                                                                                                                                                                   |
+| 26  | SSH 签名 + AkiEbb 身份                                              | 卡片 GPG 密钥绑的是 RhenCloud 身份，签不出 Verified                                                                                                                                                                                                          |
+| 27  | 信任边界五条铁律写进文档                                            | 只活在对白里的约束等于没有约束                                                                                                                                                                                                                               |
+| 28  | 两份文档（DESIGN + ROADMAP）                                        | 文档越多越没人读                                                                                                                                                                                                                                             |
+| 29  | 抗雄当量恒为 0                                                      | 用自身毫克数冒充当量会污染曲线与导出                                                                                                                                                                                                                         |
+| 30  | 体重按事件存（`weightKG`），标量只做回落                            | 上游两种工具都是这个模型；全局体重会让历史曲线随修改而漂移                                                                                                                                                                                                   |
+| 31  | 注射用 `kClearInjection`，其余用 `kClear`（两池），EU 例外          | 上游明示规则（`ester !== EU ? kClearInjection : kClear`）；同池混用时 E2 与 T 无法同时对上实测                                                                                                                                                               |
+| 32  | 引擎只读 `doseEquivMG`，`doseMG` 连参数都不传                       | 少一个能出错的入口，比多一层"记得别用"的自觉可靠                                                                                                                                                                                                             |
+| 33  | 两个引擎共用一个数值内核，引擎只提供参数与隔室拓扑                  | 线性系统的恒等关系只需验证一次；引擎差异变成可测的“相差多少倍”而不是两个黑盒                                                                                                                                                                                 |
+| 34  | `transmtf` 的凝胶三室级联把损失份额在剂量时刻扣掉                   | 与上游并行出口方程严格等价（逐点 < 1e-6），不需要给隔室加第二个出口，也就不需要新的数值路径                                                                                                                                                                  |
+| 35  | v0.1 的 `transmtf` 只做 E2 五途径，抗雄/EU 留 v0.3                  | 抗雄曲线在 v0.1 图表里没有位置（独立小图到 v0.3），先换不来用户可见价值                                                                                                                                                                                      |
+| 36  | 记录 AEAD 用 **XChaCha20-Poly1305**，不用 AES-256-GCM               | AES-GCM 只有 96-bit nonce（12 字节），用纯随机能用的样本太少，只能上计数器/去重纪律；而多标签页 + 离线队列恰恰没有全局计数器。XChaCha 的 24 字节随机 nonce 把“复用”变成概率上不可能。代价是放弃 WebCrypto 硬件加速（桌面端几 MB/s 的差别，记录只有几百字节） |
+| 37  | Argon2id 用 `hash-wasm`（参考实现的 wasm 编译），参数单位写进字段名 | 64 MiB / 3 轮的纯 JS 实现在手机上慢到用户以为卡死；wasm 与 libargon2 逐字节一致（有向量测试）。`memorySizeKiB` 而不是 `memorySize`，因为“64 当成 MB 写”会把强度默默降到 1/1024                                                                               |
+| 38  | 恢复短语用 **BIP39 英文 24 词**                                     | 校验和能让“抄错一个词”当场报错，而不是三个月后“恢复失败”；2048 词表与其他工具互认，用户手上已有的那份 BIP39 备份也能用；短语只包 DEK，不做登录凭据                                                                                                           |
+| 39  | AAD 用长度前缀 + `kind` 禁含 `\|`                                   | id 是客户端生成、还能来自导入文件的自由字符串，裸 `\|` 拼接下 `id="ab",kind="dose"` 与 `id="a",kind="b\|dose"` 会撞；包裹两段再加域分隔 AAD，防止“恢复包”被搬到“口令包”列                                                                                    |
 
 ---
 

@@ -1,0 +1,17 @@
+{
+  "name": "@hrt/crypto",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@scure/bip39": "^2.4.0",
+    "hash-wasm": "^4.12.0"
+  }
+}
